@@ -50,3 +50,4 @@ As rotas `/api/ai/*` usam a Responses API para gerar respostas de coach de ingle
 - Se o MongoDB nao estiver disponivel, a API sobe com repositorio mockado.
 - Os schemas de `User`, `DailyPlan`, `StudyBlock`, `VocabularyItem`, `ReviewSchedule`, `ConversationSession`, `StudentMistake`, `Progress` e `UserGoal` ja estao preparados para evolucao.
 # english-back
+# english-back

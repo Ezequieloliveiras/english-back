@@ -1,0 +1,46 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.app = void 0;
+const cors_1 = __importDefault(require("cors"));
+const express_1 = __importDefault(require("express"));
+const env_1 = require("./config/env");
+const ai_controller_1 = require("./controllers/ai.controller");
+const content_controller_1 = require("./controllers/content.controller");
+const conversation_controller_1 = require("./controllers/conversation.controller");
+const dailyPlan_controller_1 = require("./controllers/dailyPlan.controller");
+const onboarding_controller_1 = require("./controllers/onboarding.controller");
+const review_controller_1 = require("./controllers/review.controller");
+const content_repository_1 = require("./repositories/content.repository");
+const ai_repository_1 = require("./repositories/ai.repository");
+const dailyPlan_repository_1 = require("./repositories/dailyPlan.repository");
+const routes_1 = require("./routes");
+const content_service_1 = require("./services/content.service");
+const conversation_service_1 = require("./services/conversation.service");
+const dailyPlan_service_1 = require("./services/dailyPlan.service");
+const openai_service_1 = require("./services/openai.service");
+const onboarding_service_1 = require("./services/onboarding.service");
+const review_service_1 = require("./services/review.service");
+const contentRepository = new content_repository_1.ContentRepository();
+const aiRepository = new ai_repository_1.AiRepository();
+const dailyPlanRepository = new dailyPlan_repository_1.DailyPlanRepository();
+const contentService = new content_service_1.ContentService(contentRepository);
+const openAiService = new openai_service_1.OpenAiService(aiRepository);
+const conversationService = new conversation_service_1.ConversationService(openAiService);
+const reviewService = new review_service_1.ReviewService(contentRepository);
+const dailyPlanService = new dailyPlan_service_1.DailyPlanService(dailyPlanRepository);
+const onboardingService = new onboarding_service_1.OnboardingService(dailyPlanService);
+const contentController = new content_controller_1.ContentController(contentService);
+const conversationController = new conversation_controller_1.ConversationController(conversationService);
+const reviewController = new review_controller_1.ReviewController(reviewService);
+const onboardingController = new onboarding_controller_1.OnboardingController(onboardingService);
+const dailyPlanController = new dailyPlan_controller_1.DailyPlanController(dailyPlanService);
+const aiController = new ai_controller_1.AiController(openAiService);
+exports.app = (0, express_1.default)();
+exports.app.use((0, cors_1.default)({
+    origin: env_1.env.corsOrigin,
+}));
+exports.app.use(express_1.default.json());
+exports.app.use("/api", (0, routes_1.buildRouter)(contentController, conversationController, reviewController, onboardingController, dailyPlanController, aiController));

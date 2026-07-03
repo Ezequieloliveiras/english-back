@@ -166,6 +166,14 @@ export class AudioService {
         );
       }
 
+      if (response.status === 429) {
+        throw new AudioProviderError(
+          "OpenAI voice is temporarily unavailable because the API quota or billing limit was reached.",
+          429,
+          "openai"
+        );
+      }
+
       throw new AudioProviderError(`OpenAI speech failed (${response.status})`, response.status, "openai");
     }
 

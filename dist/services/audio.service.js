@@ -137,6 +137,9 @@ class AudioService {
             if (response.status === 401) {
                 throw new AudioProviderError("OpenAI voice is not configured correctly. Please update OPENAI_API_KEY on the backend.", 401, "openai");
             }
+            if (response.status === 429) {
+                throw new AudioProviderError("OpenAI voice is temporarily unavailable because the API quota or billing limit was reached.", 429, "openai");
+            }
             throw new AudioProviderError(`OpenAI speech failed (${response.status})`, response.status, "openai");
         }
         return {

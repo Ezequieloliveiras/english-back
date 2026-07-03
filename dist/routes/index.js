@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildRouter = void 0;
 const express_1 = require("express");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
-const buildRouter = (contentController, authController, conversationController, reviewController, onboardingController, dailyPlanController, aiController, practiceController) => {
+const buildRouter = (contentController, audioController, authController, conversationController, reviewController, onboardingController, dailyPlanController, aiController, practiceController) => {
     const router = (0, express_1.Router)();
     router.get("/health", (_request, response) => {
         response.json({ status: "ok", service: "english-os-api" });
@@ -12,6 +12,8 @@ const buildRouter = (contentController, authController, conversationController, 
     router.post("/auth/login", authController.login);
     router.post("/auth/logout", authController.logout);
     router.get("/auth/me", auth_middleware_1.requireAuth, authController.me);
+    router.get("/audio/providers", auth_middleware_1.requireAuth, audioController.providers);
+    router.post("/audio/speech", auth_middleware_1.requireAuth, audioController.speech);
     router.get("/content/bootstrap", auth_middleware_1.requireAuth, contentController.getBootstrap);
     router.post("/conversations/reply", auth_middleware_1.requireAuth, conversationController.reply);
     router.post("/reviews/record", auth_middleware_1.requireAuth, reviewController.record);

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { AiController } from "../controllers/ai.controller";
+import { AudioController } from "../controllers/audio.controller";
 import { AuthController } from "../controllers/auth.controller";
 import { ContentController } from "../controllers/content.controller";
 import { ConversationController } from "../controllers/conversation.controller";
@@ -11,6 +12,7 @@ import { requireAuth } from "../middlewares/auth.middleware";
 
 export const buildRouter = (
   contentController: ContentController,
+  audioController: AudioController,
   authController: AuthController,
   conversationController: ConversationController,
   reviewController: ReviewController,
@@ -30,6 +32,8 @@ export const buildRouter = (
   router.post("/auth/logout", authController.logout);
   router.get("/auth/me", requireAuth, authController.me);
 
+  router.get("/audio/providers", requireAuth, audioController.providers);
+  router.post("/audio/speech", requireAuth, audioController.speech);
   router.get("/content/bootstrap", requireAuth, contentController.getBootstrap);
   router.post("/conversations/reply", requireAuth, conversationController.reply);
   router.post("/reviews/record", requireAuth, reviewController.record);

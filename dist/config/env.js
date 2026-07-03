@@ -17,4 +17,6 @@ exports.env = {
     ],
     openAiApiKey: process.env.OPENAI_API_KEY ?? "",
     authCookieName: process.env.AUTH_COOKIE_NAME ?? "english_os_session",
+    voiceProviderEndpoint: process.env.VOICE_PROVIDER_ENDPOINT ?? "",
+    voiceProviderApiKey: process.env.VOICE_PROVIDER_API_KEY ?? "",
 };

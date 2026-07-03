@@ -5,6 +5,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
 import { AiController } from "./controllers/ai.controller";
+import { AudioController } from "./controllers/audio.controller";
 import { AuthController } from "./controllers/auth.controller";
 import { ContentController } from "./controllers/content.controller";
 import { ConversationController } from "./controllers/conversation.controller";
@@ -18,6 +19,7 @@ import { AiRepository } from "./repositories/ai.repository";
 import { DailyPlanRepository } from "./repositories/dailyPlan.repository";
 import { PracticeRepository } from "./repositories/practice.repository";
 import { buildRouter } from "./routes";
+import { AudioService } from "./services/audio.service";
 import { AuthService } from "./services/auth.service";
 import { ContentService } from "./services/content.service";
 import { ConversationService } from "./services/conversation.service";
@@ -32,6 +34,7 @@ const authRepository = new AuthRepository();
 const aiRepository = new AiRepository();
 const dailyPlanRepository = new DailyPlanRepository();
 const practiceRepository = new PracticeRepository();
+const audioService = new AudioService();
 const authService = new AuthService(authRepository);
 const openAiService = new OpenAiService(aiRepository);
 const conversationService = new ConversationService(openAiService);
@@ -42,6 +45,7 @@ const onboardingService = new OnboardingService(dailyPlanService);
 const practiceService = new PracticeService(practiceRepository);
 
 const contentController = new ContentController(contentService);
+const audioController = new AudioController(audioService);
 const authController = new AuthController(authService);
 const conversationController = new ConversationController(conversationService);
 const reviewController = new ReviewController(reviewService);
@@ -74,6 +78,7 @@ app.use(
   "/api",
   buildRouter(
     contentController,
+    audioController,
     authController,
     conversationController,
     reviewController,

@@ -17,6 +17,8 @@ API em `Node.js + Express + TypeScript` para o MVP do English OS.
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/auth/me`
+- `GET /api/audio/providers`
+- `POST /api/audio/speech`
 - `GET /api/content/bootstrap`
 - `POST /api/conversations/reply`
 - `POST /api/reviews/record`
@@ -58,6 +60,19 @@ OPENAI_API_KEY=coloque_a_chave_aqui
 ```
 
 As rotas `/api/ai/*` usam a Responses API para gerar respostas de coach de ingles. Se a chave nao estiver configurada, ou se a OpenAI falhar, a API retorna erro seguro sem expor stack trace ao frontend.
+
+## Audio
+
+O Shadowing suporta provedores de voz configuraveis:
+
+- `browser`: voz local do navegador, sem backend de audio.
+- `openai`: usa `OPENAI_API_KEY` e retorna MP3 gerado por OpenAI.
+- `google` ou `custom`: usam `VOICE_PROVIDER_ENDPOINT` e `VOICE_PROVIDER_API_KEY` para integrar um gateway externo.
+
+```bash
+VOICE_PROVIDER_ENDPOINT=
+VOICE_PROVIDER_API_KEY=
+```
 
 ## Observacoes
 

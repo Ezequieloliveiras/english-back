@@ -1,9 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiController = void 0;
+const openai_service_1 = require("../services/openai.service");
 const MAX_MESSAGE_LENGTH = 1600;
 const sendSafeError = (response, status, message) => {
     response.status(status).json({ message });
+};
+const sendAiError = (response, error, fallbackMessage) => {
+    if (error instanceof openai_service_1.AiProviderError) {
+        sendSafeError(response, error.statusCode, error.message);
+        return;
+    }
+    sendSafeError(response, 500, fallbackMessage);
 };
 const validateUserMessage = (body, response) => {
     if (!body.message?.trim()) {
@@ -31,8 +39,8 @@ class AiController {
                 });
                 response.json(result);
             }
-            catch {
-                sendSafeError(response, 500, "AI conversation failed");
+            catch (error) {
+                sendAiError(response, error, "AI conversation failed");
             }
         };
         this.devMode = async (request, response) => {
@@ -47,8 +55,8 @@ class AiController {
                 });
                 response.json(result);
             }
-            catch {
-                sendSafeError(response, 500, "AI developer mode failed");
+            catch (error) {
+                sendAiError(response, error, "AI developer mode failed");
             }
         };
         this.thinkInEnglish = async (request, response) => {
@@ -63,8 +71,8 @@ class AiController {
                 });
                 response.json(result);
             }
-            catch {
-                sendSafeError(response, 500, "AI think in English failed");
+            catch (error) {
+                sendAiError(response, error, "AI think in English failed");
             }
         };
         this.vocabulary = async (request, response) => {
@@ -77,8 +85,8 @@ class AiController {
                 });
                 response.json(result);
             }
-            catch {
-                sendSafeError(response, 500, "AI vocabulary generation failed");
+            catch (error) {
+                sendAiError(response, error, "AI vocabulary generation failed");
             }
         };
         this.dailyPlan = async (request, response) => {
@@ -96,8 +104,8 @@ class AiController {
                 });
                 response.json(result);
             }
-            catch {
-                sendSafeError(response, 500, "AI daily plan generation failed");
+            catch (error) {
+                sendAiError(response, error, "AI daily plan generation failed");
             }
         };
         this.analyzeMistake = async (request, response) => {
@@ -119,8 +127,8 @@ class AiController {
                 });
                 response.json(result);
             }
-            catch {
-                sendSafeError(response, 500, "AI mistake analysis failed");
+            catch (error) {
+                sendAiError(response, error, "AI mistake analysis failed");
             }
         };
     }

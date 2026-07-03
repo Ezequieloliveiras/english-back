@@ -1,11 +1,20 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
-import { OpenAiService } from "../services/openai.service";
+import { AiProviderError, OpenAiService } from "../services/openai.service";
 
 const MAX_MESSAGE_LENGTH = 1600;
 
 const sendSafeError = (response: Response, status: number, message: string) => {
   response.status(status).json({ message });
+};
+
+const sendAiError = (response: Response, error: unknown, fallbackMessage: string) => {
+  if (error instanceof AiProviderError) {
+    sendSafeError(response, error.statusCode, error.message);
+    return;
+  }
+
+  sendSafeError(response, 500, fallbackMessage);
 };
 
 const validateUserMessage = (body: { message?: string }, response: Response) => {
@@ -34,8 +43,8 @@ export class AiController {
         userId: request.auth.userId,
       });
       response.json(result);
-    } catch {
-      sendSafeError(response, 500, "AI conversation failed");
+    } catch (error) {
+      sendAiError(response, error, "AI conversation failed");
     }
   };
 
@@ -48,8 +57,8 @@ export class AiController {
         userId: request.auth.userId,
       });
       response.json(result);
-    } catch {
-      sendSafeError(response, 500, "AI developer mode failed");
+    } catch (error) {
+      sendAiError(response, error, "AI developer mode failed");
     }
   };
 
@@ -62,8 +71,8 @@ export class AiController {
         userId: request.auth.userId,
       });
       response.json(result);
-    } catch {
-      sendSafeError(response, 500, "AI think in English failed");
+    } catch (error) {
+      sendAiError(response, error, "AI think in English failed");
     }
   };
 
@@ -75,8 +84,8 @@ export class AiController {
         userId: request.auth.userId,
       });
       response.json(result);
-    } catch {
-      sendSafeError(response, 500, "AI vocabulary generation failed");
+    } catch (error) {
+      sendAiError(response, error, "AI vocabulary generation failed");
     }
   };
 
@@ -95,8 +104,8 @@ export class AiController {
         userId: request.auth.userId,
       });
       response.json(result);
-    } catch {
-      sendSafeError(response, 500, "AI daily plan generation failed");
+    } catch (error) {
+      sendAiError(response, error, "AI daily plan generation failed");
     }
   };
 
@@ -120,8 +129,8 @@ export class AiController {
         userId: request.auth.userId,
       });
       response.json(result);
-    } catch {
-      sendSafeError(response, 500, "AI mistake analysis failed");
+    } catch (error) {
+      sendAiError(response, error, "AI mistake analysis failed");
     }
   };
 }

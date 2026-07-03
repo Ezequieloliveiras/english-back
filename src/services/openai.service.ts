@@ -54,6 +54,15 @@ export interface AiReply {
   level?: string;
 }
 
+export class AiProviderError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode = 503
+  ) {
+    super(message);
+  }
+}
+
 const basePrompt = `
 Voce e um professor de ingles senior com mais de 20 anos de experiencia.
 Seu aluno e iniciante e precisa aprender ingles rapidamente para se comunicar.
@@ -92,7 +101,9 @@ export class OpenAiService {
   private readonly client: OpenAI | null;
 
   constructor(private readonly aiRepository: AiRepository) {
-    this.client = env.openAiApiKey ? new OpenAI({ apiKey: env.openAiApiKey }) : null;
+    this.client = env.openAiApiKey
+      ? new OpenAI({ apiKey: env.openAiApiKey, maxRetries: 0, timeout: 20000 })
+      : null;
   }
 
   private async createJsonResponse<T>({
@@ -105,7 +116,7 @@ export class OpenAiService {
     userContent: string;
   }): Promise<T> {
     if (!this.client) {
-      throw new Error(`[ai:${mode}] OPENAI_API_KEY is required`);
+      throw new AiProviderError("OpenAI is not configured on the backend.", 503);
     }
 
     try {
@@ -126,7 +137,25 @@ export class OpenAiService {
       return parseJson<T>(response.output_text);
     } catch (error) {
       console.error(`[ai:${mode}] OpenAI request failed`, error instanceof Error ? error.message : error);
-      throw error;
+
+      const status = typeof error === "object" && error && "status" in error ? Number(error.status) : undefined;
+
+      if (status === 401) {
+        throw new AiProviderError("OpenAI API key is invalid. Update OPENAI_API_KEY and restart the backend.", 401);
+      }
+
+      if (status === 429) {
+        throw new AiProviderError(
+          "OpenAI quota or billing limit was reached. Add API billing/credits to continue real AI conversations.",
+          429
+        );
+      }
+
+      if (error instanceof Error && error.name === "APIConnectionTimeoutError") {
+        throw new AiProviderError("OpenAI took too long to respond. Please try again.", 504);
+      }
+
+      throw new AiProviderError("OpenAI is unavailable right now. Please try again.", 503);
     }
   }
 

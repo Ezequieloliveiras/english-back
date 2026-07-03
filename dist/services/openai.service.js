@@ -3,9 +3,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OpenAiService = void 0;
+exports.OpenAiService = exports.AiProviderError = void 0;
 const openai_1 = __importDefault(require("openai"));
 const env_1 = require("../config/env");
+class AiProviderError extends Error {
+    constructor(message, statusCode = 503) {
+        super(message);
+        this.statusCode = statusCode;
+    }
+}
+exports.AiProviderError = AiProviderError;
 const basePrompt = `
 Voce e um professor de ingles senior com mais de 20 anos de experiencia.
 Seu aluno e iniciante e precisa aprender ingles rapidamente para se comunicar.
@@ -39,11 +46,13 @@ const limitMessages = (messages = []) => messages.slice(-8);
 class OpenAiService {
     constructor(aiRepository) {
         this.aiRepository = aiRepository;
-        this.client = env_1.env.openAiApiKey ? new openai_1.default({ apiKey: env_1.env.openAiApiKey }) : null;
+        this.client = env_1.env.openAiApiKey
+            ? new openai_1.default({ apiKey: env_1.env.openAiApiKey, maxRetries: 0, timeout: 20000 })
+            : null;
     }
     async createJsonResponse({ mode, instructions, userContent, }) {
         if (!this.client) {
-            throw new Error(`[ai:${mode}] OPENAI_API_KEY is required`);
+            throw new AiProviderError("OpenAI is not configured on the backend.", 503);
         }
         try {
             const response = await this.client.responses.create({
@@ -63,7 +72,17 @@ class OpenAiService {
         }
         catch (error) {
             console.error(`[ai:${mode}] OpenAI request failed`, error instanceof Error ? error.message : error);
-            throw error;
+            const status = typeof error === "object" && error && "status" in error ? Number(error.status) : undefined;
+            if (status === 401) {
+                throw new AiProviderError("OpenAI API key is invalid. Update OPENAI_API_KEY and restart the backend.", 401);
+            }
+            if (status === 429) {
+                throw new AiProviderError("OpenAI quota or billing limit was reached. Add API billing/credits to continue real AI conversations.", 429);
+            }
+            if (error instanceof Error && error.name === "APIConnectionTimeoutError") {
+                throw new AiProviderError("OpenAI took too long to respond. Please try again.", 504);
+            }
+            throw new AiProviderError("OpenAI is unavailable right now. Please try again.", 503);
         }
     }
     async generateConversationReply(input) {

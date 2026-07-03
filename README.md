@@ -6,12 +6,17 @@ API em `Node.js + Express + TypeScript` para o MVP do English OS.
 
 - Express com estrutura `controller/service/repository/model`
 - MongoDB com Mongoose
-- Dados mockados para o MVP funcionar mesmo sem banco ativo
-- OpenAI Responses API no backend com fallback mockado
+- Autenticacao JWT em cookie `httpOnly` com rotas protegidas
+- Helmet e rate limit para protecao HTTP basica
+- Catalogo inicial semeado no MongoDB na primeira execucao
+- OpenAI Responses API no backend sem expor chave no frontend
 
 ## Rotas principais
 
 - `GET /api/health`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
 - `GET /api/content/bootstrap`
 - `POST /api/conversations/reply`
 - `POST /api/reviews/record`
@@ -24,6 +29,7 @@ API em `Node.js + Express + TypeScript` para o MVP do English OS.
 - `POST /api/ai/vocabulary`
 - `POST /api/ai/daily-plan`
 - `POST /api/ai/analyze-mistake`
+- `POST /api/practice/complete`
 
 ## Como rodar
 
@@ -35,6 +41,14 @@ npm run dev
 
 Servidor padrao: `http://localhost:4000`
 
+## Testes
+
+```bash
+npm test
+```
+
+Os testes cobrem cadastro/login com cookie `httpOnly`, rota protegida sem sessao, logout e headers de seguranca.
+
 ## OpenAI
 
 A chave da OpenAI deve ficar somente no backend:
@@ -43,11 +57,9 @@ A chave da OpenAI deve ficar somente no backend:
 OPENAI_API_KEY=coloque_a_chave_aqui
 ```
 
-As rotas `/api/ai/*` usam a Responses API para gerar respostas de coach de ingles. Se a chave nao estiver configurada, ou se a OpenAI falhar, a API retorna fallback mockado sem expor stack trace ao frontend.
+As rotas `/api/ai/*` usam a Responses API para gerar respostas de coach de ingles. Se a chave nao estiver configurada, ou se a OpenAI falhar, a API retorna erro seguro sem expor stack trace ao frontend.
 
 ## Observacoes
 
-- Se o MongoDB nao estiver disponivel, a API sobe com repositorio mockado.
-- Os schemas de `User`, `DailyPlan`, `StudyBlock`, `VocabularyItem`, `ReviewSchedule`, `ConversationSession`, `StudentMistake`, `Progress` e `UserGoal` ja estao preparados para evolucao.
-# english-back
-# english-back
+- MongoDB e necessario para as funcionalidades reais de usuario, progresso, revisao e historico.
+- Os schemas de `User`, `DailyPlan`, `StudyBlock`, `VocabularyItem`, `ReviewSchedule`, `ConversationSession`, `StudentMistake`, `PracticeActivity`, `Progress` e `UserGoal` ja estao preparados para evolucao.

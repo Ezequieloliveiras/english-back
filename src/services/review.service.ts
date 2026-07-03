@@ -4,8 +4,8 @@ import { calculateNextReviewDate } from "../utils/reviewScheduler";
 export class ReviewService {
   constructor(private readonly contentRepository: ContentRepository) {}
 
-  async recordReview(itemId: string, wasCorrect: boolean) {
-    const payload = await this.contentRepository.getDashboardContent();
+  async recordReview(userId: string, itemId: string, wasCorrect: boolean) {
+    const payload = await this.contentRepository.getLearningContent();
     const item = payload.vocabulary.find((entry) => entry.id === itemId);
 
     if (!item) {
@@ -20,7 +20,7 @@ export class ReviewService {
     );
     const nextReviewAt = calculateNextReviewDate(nextHits, wasCorrect).toISOString();
 
-    return this.contentRepository.updateVocabularyReview(itemId, {
+    return this.contentRepository.updateVocabularyReview(userId, itemId, {
       hits: nextHits,
       misses: nextMisses,
       confidence: nextConfidence,

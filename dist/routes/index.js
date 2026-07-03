@@ -2,23 +2,29 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildRouter = void 0;
 const express_1 = require("express");
-const buildRouter = (contentController, conversationController, reviewController, onboardingController, dailyPlanController, aiController) => {
+const auth_middleware_1 = require("../middlewares/auth.middleware");
+const buildRouter = (contentController, authController, conversationController, reviewController, onboardingController, dailyPlanController, aiController, practiceController) => {
     const router = (0, express_1.Router)();
     router.get("/health", (_request, response) => {
         response.json({ status: "ok", service: "english-os-api" });
     });
-    router.get("/content/bootstrap", contentController.getBootstrap);
-    router.post("/conversations/reply", conversationController.reply);
-    router.post("/reviews/record", reviewController.record);
-    router.post("/onboarding/plan", onboardingController.createPlan);
-    router.get("/daily-plans/today", dailyPlanController.getToday);
-    router.patch("/daily-plans/blocks/complete", dailyPlanController.completeBlock);
-    router.post("/ai/conversation", aiController.conversation);
-    router.post("/ai/dev-mode", aiController.devMode);
-    router.post("/ai/think-in-english", aiController.thinkInEnglish);
-    router.post("/ai/vocabulary", aiController.vocabulary);
-    router.post("/ai/daily-plan", aiController.dailyPlan);
-    router.post("/ai/analyze-mistake", aiController.analyzeMistake);
+    router.post("/auth/register", authController.register);
+    router.post("/auth/login", authController.login);
+    router.post("/auth/logout", authController.logout);
+    router.get("/auth/me", auth_middleware_1.requireAuth, authController.me);
+    router.get("/content/bootstrap", auth_middleware_1.requireAuth, contentController.getBootstrap);
+    router.post("/conversations/reply", auth_middleware_1.requireAuth, conversationController.reply);
+    router.post("/reviews/record", auth_middleware_1.requireAuth, reviewController.record);
+    router.post("/onboarding/plan", auth_middleware_1.requireAuth, onboardingController.createPlan);
+    router.get("/daily-plans/today", auth_middleware_1.requireAuth, dailyPlanController.getToday);
+    router.patch("/daily-plans/blocks/complete", auth_middleware_1.requireAuth, dailyPlanController.completeBlock);
+    router.post("/ai/conversation", auth_middleware_1.requireAuth, aiController.conversation);
+    router.post("/ai/dev-mode", auth_middleware_1.requireAuth, aiController.devMode);
+    router.post("/ai/think-in-english", auth_middleware_1.requireAuth, aiController.thinkInEnglish);
+    router.post("/ai/vocabulary", auth_middleware_1.requireAuth, aiController.vocabulary);
+    router.post("/ai/daily-plan", auth_middleware_1.requireAuth, aiController.dailyPlan);
+    router.post("/ai/analyze-mistake", auth_middleware_1.requireAuth, aiController.analyzeMistake);
+    router.post("/practice/complete", auth_middleware_1.requireAuth, practiceController.complete);
     return router;
 };
 exports.buildRouter = buildRouter;

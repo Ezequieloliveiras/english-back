@@ -231,9 +231,9 @@ const thinkInEnglishPrompts: ThinkInEnglishPrompt[] = [
   },
 ];
 
-export const dashboardMock: DashboardPayload = {
+export const dashboardSeed: DashboardPayload = {
   user: {
-    id: "user-demo",
+    id: "seed-user-template",
     name: "Alex",
     email: "alex@example.com",
     currentLevel: "A2",
@@ -260,7 +260,7 @@ export const dashboardMock: DashboardPayload = {
   },
   dailyPlan: {
     id: "plan-1",
-    userId: "user-demo",
+    userId: "seed-user-template",
     focus: "Confidence for work conversations",
     totalMinutes: 32,
     streak: 0,

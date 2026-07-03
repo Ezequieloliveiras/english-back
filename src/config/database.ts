@@ -13,7 +13,7 @@ export const connectDatabase = async () => {
     isConnected = true;
     console.log("MongoDB connected");
   } catch (error) {
-    console.warn("MongoDB unavailable. Running with mock repositories.");
-    console.warn(error);
+    console.error("MongoDB unavailable. Real data features require a database connection.");
+    console.error(error);
   }
 };

@@ -152,10 +152,10 @@ class DailyPlanService {
         };
     }
     async createOrGetTodayPlan(userId) {
-        const user = userId
-            ? await this.dailyPlanRepository.findUserById(userId)
-            : await this.dailyPlanRepository.findOrCreateDemoUser();
-        const resolvedUser = user ?? (await this.dailyPlanRepository.findOrCreateDemoUser());
+        const resolvedUser = await this.dailyPlanRepository.findUserById(userId);
+        if (!resolvedUser) {
+            throw new Error("User not found");
+        }
         const date = todayKey();
         const existingPlan = await this.dailyPlanRepository.findPlanByUserAndDate(resolvedUser.id, date);
         const progress = await this.dailyPlanRepository.findOrCreateProgress(resolvedUser);
@@ -168,8 +168,11 @@ class DailyPlanService {
         });
         return { user: resolvedUser, dailyPlan: plan, progress };
     }
-    async createPlanForProfile(profile) {
-        const user = await this.dailyPlanRepository.findOrCreateDemoUser(profile);
+    async createPlanForProfile(userId, profile) {
+        const user = await this.dailyPlanRepository.updateUserProfile(userId, profile);
+        if (!user) {
+            throw new Error("User not found");
+        }
         const progress = await this.dailyPlanRepository.findOrCreateProgress(user);
         const plan = await this.dailyPlanRepository.savePlan({
             ...this.generatePlan(user),

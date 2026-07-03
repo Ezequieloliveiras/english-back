@@ -189,12 +189,13 @@ export class DailyPlanService {
     };
   }
 
-  async createOrGetTodayPlan(userId?: string) {
-    const user = userId
-      ? await this.dailyPlanRepository.findUserById(userId)
-      : await this.dailyPlanRepository.findOrCreateDemoUser();
+  async createOrGetTodayPlan(userId: string) {
+    const resolvedUser = await this.dailyPlanRepository.findUserById(userId);
 
-    const resolvedUser = user ?? (await this.dailyPlanRepository.findOrCreateDemoUser());
+    if (!resolvedUser) {
+      throw new Error("User not found");
+    }
+
     const date = todayKey();
     const existingPlan = await this.dailyPlanRepository.findPlanByUserAndDate(resolvedUser.id, date);
     const progress = await this.dailyPlanRepository.findOrCreateProgress(resolvedUser);
@@ -211,8 +212,13 @@ export class DailyPlanService {
     return { user: resolvedUser, dailyPlan: plan, progress };
   }
 
-  async createPlanForProfile(profile: Partial<UserProfile>) {
-    const user = await this.dailyPlanRepository.findOrCreateDemoUser(profile);
+  async createPlanForProfile(userId: string, profile: Partial<UserProfile>) {
+    const user = await this.dailyPlanRepository.updateUserProfile(userId, profile);
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     const progress = await this.dailyPlanRepository.findOrCreateProgress(user);
     const plan = await this.dailyPlanRepository.savePlan({
       ...this.generatePlan(user),
@@ -222,7 +228,7 @@ export class DailyPlanService {
     return { user, dailyPlan: plan, progress };
   }
 
-  async completeBlock(planId: string, blockId: string, userId?: string) {
+  async completeBlock(planId: string, blockId: string, userId: string) {
     const { user, dailyPlan, progress } = await this.createOrGetTodayPlan(userId);
     const plan = dailyPlan.id === planId ? dailyPlan : null;
 

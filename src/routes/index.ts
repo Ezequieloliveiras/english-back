@@ -1,18 +1,23 @@
 import { Router } from "express";
 import { AiController } from "../controllers/ai.controller";
+import { AuthController } from "../controllers/auth.controller";
 import { ContentController } from "../controllers/content.controller";
 import { ConversationController } from "../controllers/conversation.controller";
 import { DailyPlanController } from "../controllers/dailyPlan.controller";
 import { OnboardingController } from "../controllers/onboarding.controller";
+import { PracticeController } from "../controllers/practice.controller";
 import { ReviewController } from "../controllers/review.controller";
+import { requireAuth } from "../middlewares/auth.middleware";
 
 export const buildRouter = (
   contentController: ContentController,
+  authController: AuthController,
   conversationController: ConversationController,
   reviewController: ReviewController,
   onboardingController: OnboardingController,
   dailyPlanController: DailyPlanController,
-  aiController: AiController
+  aiController: AiController,
+  practiceController: PracticeController
 ) => {
   const router = Router();
 
@@ -20,18 +25,24 @@ export const buildRouter = (
     response.json({ status: "ok", service: "english-os-api" });
   });
 
-  router.get("/content/bootstrap", contentController.getBootstrap);
-  router.post("/conversations/reply", conversationController.reply);
-  router.post("/reviews/record", reviewController.record);
-  router.post("/onboarding/plan", onboardingController.createPlan);
-  router.get("/daily-plans/today", dailyPlanController.getToday);
-  router.patch("/daily-plans/blocks/complete", dailyPlanController.completeBlock);
-  router.post("/ai/conversation", aiController.conversation);
-  router.post("/ai/dev-mode", aiController.devMode);
-  router.post("/ai/think-in-english", aiController.thinkInEnglish);
-  router.post("/ai/vocabulary", aiController.vocabulary);
-  router.post("/ai/daily-plan", aiController.dailyPlan);
-  router.post("/ai/analyze-mistake", aiController.analyzeMistake);
+  router.post("/auth/register", authController.register);
+  router.post("/auth/login", authController.login);
+  router.post("/auth/logout", authController.logout);
+  router.get("/auth/me", requireAuth, authController.me);
+
+  router.get("/content/bootstrap", requireAuth, contentController.getBootstrap);
+  router.post("/conversations/reply", requireAuth, conversationController.reply);
+  router.post("/reviews/record", requireAuth, reviewController.record);
+  router.post("/onboarding/plan", requireAuth, onboardingController.createPlan);
+  router.get("/daily-plans/today", requireAuth, dailyPlanController.getToday);
+  router.patch("/daily-plans/blocks/complete", requireAuth, dailyPlanController.completeBlock);
+  router.post("/ai/conversation", requireAuth, aiController.conversation);
+  router.post("/ai/dev-mode", requireAuth, aiController.devMode);
+  router.post("/ai/think-in-english", requireAuth, aiController.thinkInEnglish);
+  router.post("/ai/vocabulary", requireAuth, aiController.vocabulary);
+  router.post("/ai/daily-plan", requireAuth, aiController.dailyPlan);
+  router.post("/ai/analyze-mistake", requireAuth, aiController.analyzeMistake);
+  router.post("/practice/complete", requireAuth, practiceController.complete);
 
   return router;
 };

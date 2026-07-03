@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OpenAiService = void 0;
 const openai_1 = __importDefault(require("openai"));
-const mockData_1 = require("../data/mockData");
 const env_1 = require("../config/env");
 const basePrompt = `
 Voce e um professor de ingles senior com mais de 20 anos de experiencia.
@@ -32,21 +31,9 @@ Developer prompts:
 - falar com cliente
 Use frases curtas e naturais para contexto tecnico.
 `;
-const fallbackConversation = (mode) => ({
-    reply: `Good. Let us practice ${mode} with simple English. Say one short sentence about your situation.`,
-    correction: "",
-    suggestedPhrase: "I am working on this today.",
-    nextQuestion: "What is one thing you need to explain?",
-    level: "A1",
-});
-const safeParseJson = (text, fallback) => {
-    try {
-        const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
-        return { ...fallback, ...JSON.parse(cleaned) };
-    }
-    catch {
-        return fallback;
-    }
+const parseJson = (text) => {
+    const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
+    return JSON.parse(cleaned);
 };
 const limitMessages = (messages = []) => messages.slice(-8);
 class OpenAiService {
@@ -54,10 +41,9 @@ class OpenAiService {
         this.aiRepository = aiRepository;
         this.client = env_1.env.openAiApiKey ? new openai_1.default({ apiKey: env_1.env.openAiApiKey }) : null;
     }
-    async createJsonResponse({ mode, instructions, userContent, fallback, }) {
+    async createJsonResponse({ mode, instructions, userContent, }) {
         if (!this.client) {
-            console.warn(`[ai:${mode}] OPENAI_API_KEY missing. Using fallback.`);
-            return fallback;
+            throw new Error(`[ai:${mode}] OPENAI_API_KEY is required`);
         }
         try {
             const response = await this.client.responses.create({
@@ -73,15 +59,14 @@ class OpenAiService {
                     },
                 ],
             });
-            return safeParseJson(response.output_text, fallback);
+            return parseJson(response.output_text);
         }
         catch (error) {
             console.error(`[ai:${mode}] OpenAI request failed`, error instanceof Error ? error.message : error);
-            return fallback;
+            throw error;
         }
     }
     async generateConversationReply(input) {
-        const fallback = fallbackConversation(input.mode);
         const reply = await this.createJsonResponse({
             mode: "conversation",
             instructions: `
@@ -95,7 +80,6 @@ Objetivo: ${input.goal ?? "comunicacao real"}
                 recentHistory: limitMessages(input.previousMessages),
                 userMessage: input.message,
             }),
-            fallback,
         });
         await this.persistConversation(input, reply);
         return reply;
@@ -115,12 +99,6 @@ Objetivo: ${input.goal ?? "ingles tecnico para trabalho"}
                 recentHistory: limitMessages(input.previousMessages),
                 userMessage: input.message,
             }),
-            fallback: {
-                reply: "Good. Explain the bug in one simple sentence.",
-                suggestedPhrase: "The issue happens when the user opens the page.",
-                nextQuestion: "What is the impact?",
-                level: "A1",
-            },
         });
         await this.persistConversation({ ...input, mode: `developer:${input.mode}` }, reply);
         return reply;
@@ -137,13 +115,6 @@ Retorne no formato:
                 recentHistory: limitMessages(input.previousMessages),
                 userMessage: input.message,
             }),
-            fallback: {
-                reply: "Describe it in English first. What do you use it for?",
-                correction: "",
-                suggestedPhrase: "I use it to sit down.",
-                nextQuestion: "Where do you use it?",
-                level: "A1",
-            },
         });
         await this.persistConversation({ ...input, mode: "think-in-english" }, reply);
         return reply;
@@ -157,15 +128,6 @@ Retorne:
 {"topic":"tema","level":"A1","examples":[{"phrase":"frase em ingles","translation":"traducao curta","category":"categoria"}]}
 `,
             userContent: JSON.stringify(input),
-            fallback: {
-                topic: input.topic ?? "work",
-                level: input.level ?? "A1",
-                examples: mockData_1.dashboardMock.vocabulary.slice(0, 3).map((item) => ({
-                    phrase: item.phrase,
-                    translation: item.translation,
-                    category: item.category,
-                })),
-            },
         });
     }
     async generateDailyPlan(input) {
@@ -178,14 +140,6 @@ Retorne:
 Use os minutos disponiveis sem ultrapassar o total.
 `,
             userContent: JSON.stringify(input),
-            fallback: {
-                focus: "Speak with confidence using simple English.",
-                blocks: mockData_1.dashboardMock.dailyPlan.blocks.map((block) => ({
-                    title: block.title,
-                    durationMinutes: block.durationMinutes,
-                    objective: block.objective,
-                })),
-            },
         });
     }
     async analyzeStudentMistake(input) {
@@ -197,12 +151,6 @@ Retorne:
 {"originalSentence":"frase original","correctedSentence":"frase corrigida","mistakeType":"tipo do erro","explanation":"explicacao curta em portugues"}
 `,
             userContent: JSON.stringify(input),
-            fallback: {
-                originalSentence: input.sentence,
-                correctedSentence: input.sentence,
-                mistakeType: "fluency",
-                explanation: "Continue praticando frases curtas e naturais.",
-            },
         });
         await this.aiRepository.saveMistake({
             userId: input.userId,

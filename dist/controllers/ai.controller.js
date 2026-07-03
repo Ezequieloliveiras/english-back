@@ -6,10 +6,6 @@ const sendSafeError = (response, status, message) => {
     response.status(status).json({ message });
 };
 const validateUserMessage = (body, response) => {
-    if (!body.userId) {
-        sendSafeError(response, 400, "userId is required");
-        return false;
-    }
     if (!body.message?.trim()) {
         sendSafeError(response, 400, "message is required");
         return false;
@@ -25,9 +21,14 @@ class AiController {
         this.openAiService = openAiService;
         this.conversation = async (request, response) => {
             try {
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
                 if (!validateUserMessage(request.body, response))
                     return;
-                const result = await this.openAiService.generateConversationReply(request.body);
+                const result = await this.openAiService.generateConversationReply({
+                    ...request.body,
+                    userId: request.auth.userId,
+                });
                 response.json(result);
             }
             catch {
@@ -36,9 +37,14 @@ class AiController {
         };
         this.devMode = async (request, response) => {
             try {
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
                 if (!validateUserMessage(request.body, response))
                     return;
-                const result = await this.openAiService.generateDeveloperEnglishReply(request.body);
+                const result = await this.openAiService.generateDeveloperEnglishReply({
+                    ...request.body,
+                    userId: request.auth.userId,
+                });
                 response.json(result);
             }
             catch {
@@ -47,9 +53,14 @@ class AiController {
         };
         this.thinkInEnglish = async (request, response) => {
             try {
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
                 if (!validateUserMessage(request.body, response))
                     return;
-                const result = await this.openAiService.generateThinkInEnglishReply(request.body);
+                const result = await this.openAiService.generateThinkInEnglishReply({
+                    ...request.body,
+                    userId: request.auth.userId,
+                });
                 response.json(result);
             }
             catch {
@@ -58,11 +69,12 @@ class AiController {
         };
         this.vocabulary = async (request, response) => {
             try {
-                if (!request.body.userId) {
-                    sendSafeError(response, 400, "userId is required");
-                    return;
-                }
-                const result = await this.openAiService.generateVocabularyExamples(request.body);
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
+                const result = await this.openAiService.generateVocabularyExamples({
+                    ...request.body,
+                    userId: request.auth.userId,
+                });
                 response.json(result);
             }
             catch {
@@ -71,12 +83,17 @@ class AiController {
         };
         this.dailyPlan = async (request, response) => {
             try {
-                const { userId, level, goal, dailyMinutes, difficulty } = request.body;
-                if (!userId || !level || !goal || !dailyMinutes || !difficulty) {
-                    sendSafeError(response, 400, "userId, level, goal, dailyMinutes and difficulty are required");
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
+                const { level, goal, dailyMinutes, difficulty } = request.body;
+                if (!level || !goal || !dailyMinutes || !difficulty) {
+                    sendSafeError(response, 400, "level, goal, dailyMinutes and difficulty are required");
                     return;
                 }
-                const result = await this.openAiService.generateDailyPlan(request.body);
+                const result = await this.openAiService.generateDailyPlan({
+                    ...request.body,
+                    userId: request.auth.userId,
+                });
                 response.json(result);
             }
             catch {
@@ -85,16 +102,21 @@ class AiController {
         };
         this.analyzeMistake = async (request, response) => {
             try {
-                const { userId, sentence } = request.body;
-                if (!userId || !sentence?.trim()) {
-                    sendSafeError(response, 400, "userId and sentence are required");
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
+                const { sentence } = request.body;
+                if (!sentence?.trim()) {
+                    sendSafeError(response, 400, "sentence is required");
                     return;
                 }
                 if (sentence.length > MAX_MESSAGE_LENGTH) {
                     sendSafeError(response, 400, "sentence is too long");
                     return;
                 }
-                const result = await this.openAiService.analyzeStudentMistake(request.body);
+                const result = await this.openAiService.analyzeStudentMistake({
+                    ...request.body,
+                    userId: request.auth.userId,
+                });
                 response.json(result);
             }
             catch {

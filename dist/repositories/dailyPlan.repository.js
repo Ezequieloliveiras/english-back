@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DailyPlanRepository = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const mockData_1 = require("../data/mockData");
 const dailyPlan_model_1 = require("../models/dailyPlan.model");
 const progress_model_1 = require("../models/progress.model");
 const user_model_1 = require("../models/user.model");
@@ -72,37 +71,6 @@ const memoryState = {
     progress: new Map(),
 };
 class DailyPlanRepository {
-    async findOrCreateDemoUser(profile) {
-        const demoEmail = profile?.email ?? mockData_1.dashboardMock.user.email;
-        if (!isDatabaseReady()) {
-            const existing = [...memoryState.users.values()].find((user) => user.email === demoEmail);
-            if (existing) {
-                const updated = { ...existing, ...profile, id: existing.id };
-                memoryState.users.set(updated.id, updated);
-                return updated;
-            }
-            const user = {
-                ...mockData_1.dashboardMock.user,
-                ...profile,
-                id: `user-${memoryState.users.size + 1}`,
-                email: demoEmail,
-            };
-            memoryState.users.set(user.id, user);
-            return user;
-        }
-        const user = await user_model_1.UserModel.findOneAndUpdate({ email: demoEmail }, {
-            $set: {
-                name: profile?.name ?? mockData_1.dashboardMock.user.name,
-                email: demoEmail,
-                currentLevel: profile?.currentLevel ?? mockData_1.dashboardMock.user.currentLevel,
-                dailyMinutes: profile?.dailyMinutes ?? mockData_1.dashboardMock.user.dailyMinutes,
-                profession: profile?.profession ?? mockData_1.dashboardMock.user.profession,
-                primaryGoal: profile?.primaryGoal ?? mockData_1.dashboardMock.user.primaryGoal,
-                mainDifficulty: profile?.mainDifficulty ?? mockData_1.dashboardMock.user.mainDifficulty,
-            },
-        }, { new: true, upsert: true });
-        return mapUser(user);
-    }
     async findUserById(userId) {
         if (!isDatabaseReady()) {
             return memoryState.users.get(userId) ?? null;
@@ -112,6 +80,31 @@ class DailyPlanRepository {
         }
         const user = await user_model_1.UserModel.findById(userId);
         return user ? mapUser(user) : null;
+    }
+    async updateUserProfile(userId, profile) {
+        if (!isDatabaseReady()) {
+            const existing = memoryState.users.get(userId);
+            if (!existing) {
+                return null;
+            }
+            const updated = { ...existing, ...profile, id: existing.id, email: existing.email };
+            memoryState.users.set(userId, updated);
+            return updated;
+        }
+        if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
+            return null;
+        }
+        const updated = await user_model_1.UserModel.findByIdAndUpdate(userId, {
+            $set: {
+                ...(profile.name ? { name: profile.name } : {}),
+                ...(profile.currentLevel ? { currentLevel: profile.currentLevel } : {}),
+                ...(profile.dailyMinutes ? { dailyMinutes: profile.dailyMinutes } : {}),
+                ...(profile.profession ? { profession: profile.profession } : {}),
+                ...(profile.primaryGoal ? { primaryGoal: profile.primaryGoal } : {}),
+                ...(profile.mainDifficulty ? { mainDifficulty: profile.mainDifficulty } : {}),
+            },
+        }, { new: true });
+        return updated ? mapUser(updated) : null;
     }
     async findPlanByUserAndDate(userId, date) {
         if (!isDatabaseReady()) {

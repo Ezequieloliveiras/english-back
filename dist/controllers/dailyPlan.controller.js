@@ -5,17 +5,24 @@ class DailyPlanController {
     constructor(dailyPlanService) {
         this.dailyPlanService = dailyPlanService;
         this.getToday = async (request, response) => {
-            const userId = typeof request.query.userId === "string" ? request.query.userId : undefined;
-            const result = await this.dailyPlanService.createOrGetTodayPlan(userId);
+            if (!request.auth?.userId) {
+                response.status(401).json({ message: "Authentication required" });
+                return;
+            }
+            const result = await this.dailyPlanService.createOrGetTodayPlan(request.auth.userId);
             response.json(result);
         };
         this.completeBlock = async (request, response) => {
-            const { planId, blockId, userId } = request.body;
+            if (!request.auth?.userId) {
+                response.status(401).json({ message: "Authentication required" });
+                return;
+            }
+            const { planId, blockId } = request.body;
             if (!planId || !blockId) {
                 response.status(400).json({ message: "planId and blockId are required" });
                 return;
             }
-            const result = await this.dailyPlanService.completeBlock(planId, blockId, userId);
+            const result = await this.dailyPlanService.completeBlock(planId, blockId, request.auth.userId);
             if (!result) {
                 response.status(404).json({ message: "Study block not found" });
                 return;

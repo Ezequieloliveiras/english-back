@@ -1,11 +1,17 @@
-import { Request, Response } from "express";
+import { Response } from "express";
+import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { EnglishLevel, UserProfile } from "../types";
 import { OnboardingService } from "../services/onboarding.service";
 
 export class OnboardingController {
   constructor(private readonly onboardingService: OnboardingService) {}
 
-  createPlan = async (request: Request, response: Response) => {
+  createPlan = async (request: AuthenticatedRequest, response: Response) => {
+    if (!request.auth?.userId) {
+      response.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
     const { name, objective, level, dailyMinutes, profession, difficulty } = request.body as {
       name?: string;
       objective?: string;
@@ -20,7 +26,7 @@ export class OnboardingController {
       return;
     }
 
-    const result = await this.onboardingService.buildPlan({
+    const result = await this.onboardingService.buildPlan(request.auth.userId, {
       name,
       objective,
       level: level as EnglishLevel,

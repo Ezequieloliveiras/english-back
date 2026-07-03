@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { dashboardMock } from "../data/mockData";
 import { DailyPlanModel } from "../models/dailyPlan.model";
 import { ProgressModel } from "../models/progress.model";
 import { UserModel } from "../models/user.model";
@@ -78,47 +77,6 @@ const memoryState = {
 };
 
 export class DailyPlanRepository {
-  async findOrCreateDemoUser(profile?: Partial<UserProfile>) {
-    const demoEmail = profile?.email ?? dashboardMock.user.email;
-
-    if (!isDatabaseReady()) {
-      const existing = [...memoryState.users.values()].find((user) => user.email === demoEmail);
-
-      if (existing) {
-        const updated = { ...existing, ...profile, id: existing.id };
-        memoryState.users.set(updated.id, updated);
-        return updated;
-      }
-
-      const user: UserProfile = {
-        ...dashboardMock.user,
-        ...profile,
-        id: `user-${memoryState.users.size + 1}`,
-        email: demoEmail,
-      };
-      memoryState.users.set(user.id, user);
-      return user;
-    }
-
-    const user = await UserModel.findOneAndUpdate(
-      { email: demoEmail },
-      {
-        $set: {
-          name: profile?.name ?? dashboardMock.user.name,
-          email: demoEmail,
-          currentLevel: profile?.currentLevel ?? dashboardMock.user.currentLevel,
-          dailyMinutes: profile?.dailyMinutes ?? dashboardMock.user.dailyMinutes,
-          profession: profile?.profession ?? dashboardMock.user.profession,
-          primaryGoal: profile?.primaryGoal ?? dashboardMock.user.primaryGoal,
-          mainDifficulty: profile?.mainDifficulty ?? dashboardMock.user.mainDifficulty,
-        },
-      },
-      { new: true, upsert: true }
-    );
-
-    return mapUser(user);
-  }
-
   async findUserById(userId: string) {
     if (!isDatabaseReady()) {
       return memoryState.users.get(userId) ?? null;
@@ -130,6 +88,41 @@ export class DailyPlanRepository {
 
     const user = await UserModel.findById(userId);
     return user ? mapUser(user) : null;
+  }
+
+  async updateUserProfile(userId: string, profile: Partial<UserProfile>) {
+    if (!isDatabaseReady()) {
+      const existing = memoryState.users.get(userId);
+
+      if (!existing) {
+        return null;
+      }
+
+      const updated = { ...existing, ...profile, id: existing.id, email: existing.email };
+      memoryState.users.set(userId, updated);
+      return updated;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return null;
+    }
+
+    const updated = await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          ...(profile.name ? { name: profile.name } : {}),
+          ...(profile.currentLevel ? { currentLevel: profile.currentLevel } : {}),
+          ...(profile.dailyMinutes ? { dailyMinutes: profile.dailyMinutes } : {}),
+          ...(profile.profession ? { profession: profile.profession } : {}),
+          ...(profile.primaryGoal ? { primaryGoal: profile.primaryGoal } : {}),
+          ...(profile.mainDifficulty ? { mainDifficulty: profile.mainDifficulty } : {}),
+        },
+      },
+      { new: true }
+    );
+
+    return updated ? mapUser(updated) : null;
   }
 
   async findPlanByUserAndDate(userId: string, date: string) {

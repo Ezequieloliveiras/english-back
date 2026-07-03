@@ -1,10 +1,16 @@
-import { Request, Response } from "express";
+import { Response } from "express";
+import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { ConversationService } from "../services/conversation.service";
 
 export class ConversationController {
   constructor(private readonly conversationService: ConversationService) {}
 
-  reply = async (request: Request, response: Response) => {
+  reply = async (request: AuthenticatedRequest, response: Response) => {
+    if (!request.auth?.userId) {
+      response.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
     const { modeId, message } = request.body as { modeId?: string; message?: string };
 
     if (!modeId || !message) {
@@ -12,7 +18,7 @@ export class ConversationController {
       return;
     }
 
-    const reply = await this.conversationService.reply(modeId, message);
+    const reply = await this.conversationService.reply(request.auth.userId, modeId, message);
     response.json(reply);
   };
 }

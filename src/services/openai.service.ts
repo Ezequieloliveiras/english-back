@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-import { dashboardMock } from "../data/mockData";
 import { env } from "../config/env";
 import { AiRepository } from "../repositories/ai.repository";
 
@@ -40,6 +39,13 @@ interface MistakeInput {
   level?: string;
 }
 
+interface MistakeAnalysis {
+  originalSentence: string;
+  correctedSentence: string;
+  mistakeType: string;
+  explanation: string;
+}
+
 export interface AiReply {
   reply: string;
   correction?: string;
@@ -75,21 +81,9 @@ Developer prompts:
 Use frases curtas e naturais para contexto tecnico.
 `;
 
-const fallbackConversation = (mode: string): AiReply => ({
-  reply: `Good. Let us practice ${mode} with simple English. Say one short sentence about your situation.`,
-  correction: "",
-  suggestedPhrase: "I am working on this today.",
-  nextQuestion: "What is one thing you need to explain?",
-  level: "A1",
-});
-
-const safeParseJson = <T>(text: string, fallback: T): T => {
-  try {
-    const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
-    return { ...fallback, ...JSON.parse(cleaned) };
-  } catch {
-    return fallback;
-  }
+const parseJson = <T>(text: string): T => {
+  const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
+  return JSON.parse(cleaned) as T;
 };
 
 const limitMessages = (messages: PreviousMessage[] = []) => messages.slice(-8);
@@ -105,16 +99,13 @@ export class OpenAiService {
     mode,
     instructions,
     userContent,
-    fallback,
   }: {
     mode: AiMode;
     instructions: string;
     userContent: string;
-    fallback: T;
   }): Promise<T> {
     if (!this.client) {
-      console.warn(`[ai:${mode}] OPENAI_API_KEY missing. Using fallback.`);
-      return fallback;
+      throw new Error(`[ai:${mode}] OPENAI_API_KEY is required`);
     }
 
     try {
@@ -132,15 +123,14 @@ export class OpenAiService {
         ],
       });
 
-      return safeParseJson(response.output_text, fallback);
+      return parseJson<T>(response.output_text);
     } catch (error) {
       console.error(`[ai:${mode}] OpenAI request failed`, error instanceof Error ? error.message : error);
-      return fallback;
+      throw error;
     }
   }
 
   async generateConversationReply(input: ConversationInput): Promise<AiReply> {
-    const fallback = fallbackConversation(input.mode);
     const reply = await this.createJsonResponse<AiReply>({
       mode: "conversation",
       instructions: `
@@ -154,7 +144,6 @@ Objetivo: ${input.goal ?? "comunicacao real"}
         recentHistory: limitMessages(input.previousMessages),
         userMessage: input.message,
       }),
-      fallback,
     });
 
     await this.persistConversation(input, reply);
@@ -176,12 +165,6 @@ Objetivo: ${input.goal ?? "ingles tecnico para trabalho"}
         recentHistory: limitMessages(input.previousMessages),
         userMessage: input.message,
       }),
-      fallback: {
-        reply: "Good. Explain the bug in one simple sentence.",
-        suggestedPhrase: "The issue happens when the user opens the page.",
-        nextQuestion: "What is the impact?",
-        level: "A1",
-      },
     });
 
     await this.persistConversation({ ...input, mode: `developer:${input.mode}` }, reply);
@@ -200,13 +183,6 @@ Retorne no formato:
         recentHistory: limitMessages(input.previousMessages),
         userMessage: input.message,
       }),
-      fallback: {
-        reply: "Describe it in English first. What do you use it for?",
-        correction: "",
-        suggestedPhrase: "I use it to sit down.",
-        nextQuestion: "Where do you use it?",
-        level: "A1",
-      },
     });
 
     await this.persistConversation({ ...input, mode: "think-in-english" }, reply);
@@ -222,15 +198,6 @@ Retorne:
 {"topic":"tema","level":"A1","examples":[{"phrase":"frase em ingles","translation":"traducao curta","category":"categoria"}]}
 `,
       userContent: JSON.stringify(input),
-      fallback: {
-        topic: input.topic ?? "work",
-        level: input.level ?? "A1",
-        examples: dashboardMock.vocabulary.slice(0, 3).map((item) => ({
-          phrase: item.phrase,
-          translation: item.translation,
-          category: item.category,
-        })),
-      },
     });
   }
 
@@ -244,19 +211,11 @@ Retorne:
 Use os minutos disponiveis sem ultrapassar o total.
 `,
       userContent: JSON.stringify(input),
-      fallback: {
-        focus: "Speak with confidence using simple English.",
-        blocks: dashboardMock.dailyPlan.blocks.map((block) => ({
-          title: block.title,
-          durationMinutes: block.durationMinutes,
-          objective: block.objective,
-        })),
-      },
     });
   }
 
   async analyzeStudentMistake(input: MistakeInput) {
-    const result = await this.createJsonResponse({
+    const result = await this.createJsonResponse<MistakeAnalysis>({
       mode: "mistake",
       instructions: `
 Analise apenas erros importantes para comunicacao.
@@ -264,12 +223,6 @@ Retorne:
 {"originalSentence":"frase original","correctedSentence":"frase corrigida","mistakeType":"tipo do erro","explanation":"explicacao curta em portugues"}
 `,
       userContent: JSON.stringify(input),
-      fallback: {
-        originalSentence: input.sentence,
-        correctedSentence: input.sentence,
-        mistakeType: "fluency",
-        explanation: "Continue praticando frases curtas e naturais.",
-      },
     });
 
     await this.aiRepository.saveMistake({

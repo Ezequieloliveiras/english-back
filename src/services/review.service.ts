@@ -5,7 +5,7 @@ export class ReviewService {
   constructor(private readonly contentRepository: ContentRepository) {}
 
   async recordReview(userId: string, itemId: string, wasCorrect: boolean) {
-    const payload = await this.contentRepository.getLearningContent();
+    const payload = await this.contentRepository.getLearningContent(userId);
     const item = payload.vocabulary.find((entry) => entry.id === itemId);
 
     if (!item) {

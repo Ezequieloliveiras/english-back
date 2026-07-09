@@ -10,6 +10,7 @@ const sentenceSchema = new Schema(
 
 const vocabularyItemSchema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: "User" },
     phrase: { type: String, required: true },
     translation: { type: String },
     level: { type: String, required: true },
@@ -19,6 +20,10 @@ const vocabularyItemSchema = new Schema(
     nextReviewAt: { type: Date, required: true },
     hits: { type: Number, required: true, default: 0 },
     misses: { type: Number, required: true, default: 0 },
+    source: { type: String, required: true, default: "user_saved" },
+    timesPracticed: { type: Number, required: true, default: 0 },
+    timesCorrect: { type: Number, required: true, default: 0 },
+    timesWrong: { type: Number, required: true, default: 0 },
   },
   { timestamps: true }
 );

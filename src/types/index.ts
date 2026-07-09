@@ -2,6 +2,7 @@ export type EnglishLevel = "A1" | "A2" | "B1" | "B2" | "C1";
 
 export type StudyBlockType =
   | "shadowing"
+  | "speaking-coach"
   | "listening"
   | "vocabulary"
   | "conversation"
@@ -58,6 +59,47 @@ export interface UserProfile {
   mainDifficulty: "listening" | "speaking" | "vocabulary" | "pronunciation";
 }
 
+export interface UserSettings {
+  userId: string;
+  languageMode: "pt_explanation_en_correction" | "full_english";
+  preferredAccent: "american" | "british" | "neutral";
+  correctionStyle: "gentle" | "direct" | "detailed";
+  interfaceLanguage: "pt-BR" | "en";
+  primaryObjective: "conversation" | "interview" | "work" | "travel" | "technical_english";
+  dailyMinutes: number;
+}
+
+export interface UserProgressStats {
+  totalWordsPronounced: number;
+  totalPhrasesPracticed: number;
+  totalSpeakingSessions: number;
+  totalStudyMinutes: number;
+  totalRecordings: number;
+  totalCorrections: number;
+  currentStreak: number;
+  lastStudyDate?: string;
+  mainImprovementArea: string;
+  mostPracticedWords: string[];
+  mostMissedWords: string[];
+  weeklySpeaking: Array<{
+    dateLabel: string;
+    score: number;
+  }>;
+}
+
+export interface RecentSpeakingAttempt {
+  id: string;
+  expectedText: string;
+  transcribedText: string;
+  pronunciationScore: number;
+  naturalnessScore: number;
+  connectedSpeechScore: number;
+  wordsSpokenCount: number;
+  correctedWords: string[];
+  suggestion?: string;
+  createdAt?: string;
+}
+
 export interface VocabularySentence {
   text: string;
   translation?: string;
@@ -74,6 +116,10 @@ export interface VocabularyItem {
   nextReviewAt: string;
   hits: number;
   misses: number;
+  source?: string;
+  timesPracticed?: number;
+  timesCorrect?: number;
+  timesWrong?: number;
 }
 
 export interface ListeningQuestion {
@@ -126,10 +172,14 @@ export interface ThinkInEnglishPrompt {
 
 export interface DashboardPayload {
   user: UserProfile;
+  settings: UserSettings;
   goal: UserGoal;
   progress: ProgressSnapshot;
+  realProgressStats: UserProgressStats;
+  recentSpeakingAttempts: RecentSpeakingAttempt[];
   dailyPlan: DailyPlan;
   vocabulary: VocabularyItem[];
+  reviewQueue: VocabularyItem[];
   listeningLessons: ListeningLesson[];
   shadowingItems: ShadowingItem[];
   conversationModes: ConversationMode[];

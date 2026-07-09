@@ -13,11 +13,13 @@ import { DailyPlanController } from "./controllers/dailyPlan.controller";
 import { OnboardingController } from "./controllers/onboarding.controller";
 import { PracticeController } from "./controllers/practice.controller";
 import { ReviewController } from "./controllers/review.controller";
+import { SettingsController } from "./controllers/settings.controller";
 import { AuthRepository } from "./repositories/auth.repository";
 import { ContentRepository } from "./repositories/content.repository";
 import { AiRepository } from "./repositories/ai.repository";
 import { DailyPlanRepository } from "./repositories/dailyPlan.repository";
 import { PracticeRepository } from "./repositories/practice.repository";
+import { SettingsRepository } from "./repositories/settings.repository";
 import { buildRouter } from "./routes";
 import { AudioService } from "./services/audio.service";
 import { AuthService } from "./services/auth.service";
@@ -28,19 +30,27 @@ import { OpenAiService } from "./services/openai.service";
 import { OnboardingService } from "./services/onboarding.service";
 import { PracticeService } from "./services/practice.service";
 import { ReviewService } from "./services/review.service";
+import { SettingsService } from "./services/settings.service";
 
 const contentRepository = new ContentRepository();
 const authRepository = new AuthRepository();
 const aiRepository = new AiRepository();
 const dailyPlanRepository = new DailyPlanRepository();
 const practiceRepository = new PracticeRepository();
+const settingsRepository = new SettingsRepository();
 const audioService = new AudioService();
 const authService = new AuthService(authRepository);
-const openAiService = new OpenAiService(aiRepository);
+const settingsService = new SettingsService(settingsRepository);
+const openAiService = new OpenAiService(aiRepository, settingsRepository);
 const conversationService = new ConversationService(openAiService);
 const reviewService = new ReviewService(contentRepository);
 const dailyPlanService = new DailyPlanService(dailyPlanRepository);
-const contentService = new ContentService(contentRepository, dailyPlanService);
+const contentService = new ContentService(
+  contentRepository,
+  dailyPlanService,
+  settingsRepository,
+  aiRepository
+);
 const onboardingService = new OnboardingService(dailyPlanService);
 const practiceService = new PracticeService(practiceRepository);
 
@@ -53,6 +63,7 @@ const onboardingController = new OnboardingController(onboardingService);
 const dailyPlanController = new DailyPlanController(dailyPlanService);
 const aiController = new AiController(openAiService);
 const practiceController = new PracticeController(practiceService);
+const settingsController = new SettingsController(settingsService);
 
 export const app = express();
 
@@ -72,7 +83,7 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
 
 app.use(
   "/api",
@@ -85,6 +96,7 @@ app.use(
     onboardingController,
     dailyPlanController,
     aiController,
-    practiceController
+    practiceController,
+    settingsController
   )
 );

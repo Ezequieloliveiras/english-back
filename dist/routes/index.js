@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildRouter = void 0;
 const express_1 = require("express");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
-const buildRouter = (contentController, audioController, authController, conversationController, reviewController, onboardingController, dailyPlanController, aiController, practiceController) => {
+const buildRouter = (contentController, audioController, authController, conversationController, reviewController, onboardingController, dailyPlanController, aiController, practiceController, settingsController) => {
     const router = (0, express_1.Router)();
     router.get("/health", (_request, response) => {
         response.json({ status: "ok", service: "english-os-api" });
@@ -12,6 +12,8 @@ const buildRouter = (contentController, audioController, authController, convers
     router.post("/auth/login", authController.login);
     router.post("/auth/logout", authController.logout);
     router.get("/auth/me", auth_middleware_1.requireAuth, authController.me);
+    router.get("/settings", auth_middleware_1.requireAuth, settingsController.get);
+    router.patch("/settings", auth_middleware_1.requireAuth, settingsController.update);
     router.get("/audio/providers", auth_middleware_1.requireAuth, audioController.providers);
     router.post("/audio/speech", auth_middleware_1.requireAuth, audioController.speech);
     router.get("/content/bootstrap", auth_middleware_1.requireAuth, contentController.getBootstrap);
@@ -25,6 +27,7 @@ const buildRouter = (contentController, audioController, authController, convers
     router.post("/ai/think-in-english", auth_middleware_1.requireAuth, aiController.thinkInEnglish);
     router.post("/ai/vocabulary", auth_middleware_1.requireAuth, aiController.vocabulary);
     router.post("/ai/daily-plan", auth_middleware_1.requireAuth, aiController.dailyPlan);
+    router.post("/ai/speaking-coach", auth_middleware_1.requireAuth, aiController.speakingCoach);
     router.post("/ai/analyze-mistake", auth_middleware_1.requireAuth, aiController.analyzeMistake);
     router.post("/practice/complete", auth_middleware_1.requireAuth, practiceController.complete);
     return router;

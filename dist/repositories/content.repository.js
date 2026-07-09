@@ -16,6 +16,10 @@ const toPlainVocabulary = (item) => ({
     nextReviewAt: item.nextReviewAt instanceof Date ? item.nextReviewAt.toISOString() : item.nextReviewAt,
     hits: item.hits,
     misses: item.misses,
+    source: item.source ?? "user_saved",
+    timesPracticed: item.timesPracticed ?? item.hits + item.misses,
+    timesCorrect: item.timesCorrect ?? item.hits,
+    timesWrong: item.timesWrong ?? item.misses,
 });
 class ContentRepository {
     async seedCatalogIfNeeded() {
@@ -46,10 +50,10 @@ class ContentRepository {
             ]);
         }
     }
-    async getLearningContent() {
+    async getLearningContent(userId) {
         await this.seedCatalogIfNeeded();
         const [vocabulary, catalogs] = await Promise.all([
-            vocabularyItem_model_1.VocabularyItemModel.find().sort({ createdAt: 1 }),
+            vocabularyItem_model_1.VocabularyItemModel.find({ userId }).sort({ createdAt: -1 }),
             contentCatalog_model_1.ContentCatalogModel.find(),
         ]);
         const byKey = new Map(catalogs.map((catalog) => [catalog.key, catalog.items]));
@@ -62,13 +66,30 @@ class ContentRepository {
             thinkInEnglishPrompts: byKey.get("thinkInEnglishPrompts") ?? [],
         };
     }
+    async getDueReviewItems(userId) {
+        const now = new Date();
+        const schedules = await reviewSchedule_model_1.ReviewScheduleModel.find({
+            userId,
+            nextReviewAt: { $lte: now },
+        })
+            .sort({ nextReviewAt: 1 })
+            .populate("vocabularyItemId");
+        return schedules
+            .map((schedule) => schedule.vocabularyItemId)
+            .filter(Boolean)
+            .map(toPlainVocabulary);
+    }
     async updateVocabularyReview(userId, itemId, review) {
         const item = await vocabularyItem_model_1.VocabularyItemModel.findByIdAndUpdate(itemId, {
             $set: {
+                userId,
                 ...(review.confidence !== undefined ? { confidence: review.confidence } : {}),
                 ...(review.nextReviewAt ? { nextReviewAt: new Date(review.nextReviewAt) } : {}),
                 ...(review.hits !== undefined ? { hits: review.hits } : {}),
                 ...(review.misses !== undefined ? { misses: review.misses } : {}),
+                ...(review.hits !== undefined ? { timesCorrect: review.hits } : {}),
+                ...(review.misses !== undefined ? { timesWrong: review.misses } : {}),
+                timesPracticed: (review.hits ?? 0) + (review.misses ?? 0),
             },
         }, { new: true });
         if (!item) {

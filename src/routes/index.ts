@@ -8,6 +8,7 @@ import { DailyPlanController } from "../controllers/dailyPlan.controller";
 import { OnboardingController } from "../controllers/onboarding.controller";
 import { PracticeController } from "../controllers/practice.controller";
 import { ReviewController } from "../controllers/review.controller";
+import { SettingsController } from "../controllers/settings.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 
 export const buildRouter = (
@@ -19,7 +20,8 @@ export const buildRouter = (
   onboardingController: OnboardingController,
   dailyPlanController: DailyPlanController,
   aiController: AiController,
-  practiceController: PracticeController
+  practiceController: PracticeController,
+  settingsController: SettingsController
 ) => {
   const router = Router();
 
@@ -31,6 +33,8 @@ export const buildRouter = (
   router.post("/auth/login", authController.login);
   router.post("/auth/logout", authController.logout);
   router.get("/auth/me", requireAuth, authController.me);
+  router.get("/settings", requireAuth, settingsController.get);
+  router.patch("/settings", requireAuth, settingsController.update);
 
   router.get("/audio/providers", requireAuth, audioController.providers);
   router.post("/audio/speech", requireAuth, audioController.speech);
@@ -45,6 +49,7 @@ export const buildRouter = (
   router.post("/ai/think-in-english", requireAuth, aiController.thinkInEnglish);
   router.post("/ai/vocabulary", requireAuth, aiController.vocabulary);
   router.post("/ai/daily-plan", requireAuth, aiController.dailyPlan);
+  router.post("/ai/speaking-coach", requireAuth, aiController.speakingCoach);
   router.post("/ai/analyze-mistake", requireAuth, aiController.analyzeMistake);
   router.post("/practice/complete", requireAuth, practiceController.complete);
 

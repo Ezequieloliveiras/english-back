@@ -15,6 +15,10 @@ const toPlainVocabulary = (item: any): VocabularyItem => ({
   nextReviewAt: item.nextReviewAt instanceof Date ? item.nextReviewAt.toISOString() : item.nextReviewAt,
   hits: item.hits,
   misses: item.misses,
+  source: item.source ?? "user_saved",
+  timesPracticed: item.timesPracticed ?? item.hits + item.misses,
+  timesCorrect: item.timesCorrect ?? item.hits,
+  timesWrong: item.timesWrong ?? item.misses,
 });
 
 export class ContentRepository {
@@ -51,11 +55,11 @@ export class ContentRepository {
     }
   }
 
-  async getLearningContent() {
+  async getLearningContent(userId: string) {
     await this.seedCatalogIfNeeded();
 
     const [vocabulary, catalogs] = await Promise.all([
-      VocabularyItemModel.find().sort({ createdAt: 1 }),
+      VocabularyItemModel.find({ userId }).sort({ createdAt: -1 }),
       ContentCatalogModel.find(),
     ]);
     const byKey = new Map(catalogs.map((catalog) => [catalog.key, catalog.items]));
@@ -70,15 +74,34 @@ export class ContentRepository {
     };
   }
 
+  async getDueReviewItems(userId: string) {
+    const now = new Date();
+    const schedules = await ReviewScheduleModel.find({
+      userId,
+      nextReviewAt: { $lte: now },
+    })
+      .sort({ nextReviewAt: 1 })
+      .populate("vocabularyItemId");
+
+    return schedules
+      .map((schedule) => schedule.vocabularyItemId)
+      .filter(Boolean)
+      .map(toPlainVocabulary);
+  }
+
   async updateVocabularyReview(userId: string, itemId: string, review: Partial<VocabularyItem>) {
     const item = await VocabularyItemModel.findByIdAndUpdate(
       itemId,
       {
         $set: {
+          userId,
           ...(review.confidence !== undefined ? { confidence: review.confidence } : {}),
           ...(review.nextReviewAt ? { nextReviewAt: new Date(review.nextReviewAt) } : {}),
           ...(review.hits !== undefined ? { hits: review.hits } : {}),
           ...(review.misses !== undefined ? { misses: review.misses } : {}),
+          ...(review.hits !== undefined ? { timesCorrect: review.hits } : {}),
+          ...(review.misses !== undefined ? { timesWrong: review.misses } : {}),
+          timesPracticed: (review.hits ?? 0) + (review.misses ?? 0),
         },
       },
       { new: true }

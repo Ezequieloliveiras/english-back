@@ -8,6 +8,11 @@ const blockTemplates = {
         type: "shadowing",
         objective: "Repeat useful phrases with rhythm, stress, and confidence.",
     },
+    "speaking-coach": {
+        title: "Speaking Coach",
+        type: "speaking-coach",
+        objective: "Record your voice and get phonetic feedback on natural spoken English.",
+    },
     listening: {
         title: "Listening",
         type: "listening",
@@ -31,20 +36,21 @@ const blockTemplates = {
 };
 const baseWeights = {
     shadowing: 0.22,
+    "speaking-coach": 0.16,
     listening: 0.2,
-    vocabulary: 0.17,
-    conversation: 0.26,
-    review: 0.15,
+    vocabulary: 0.13,
+    conversation: 0.21,
+    review: 0.08,
 };
 const difficultyBoost = {
-    speaking: { conversation: 0.12, shadowing: 0.05, listening: -0.04, vocabulary: -0.03 },
+    speaking: { conversation: 0.1, "speaking-coach": 0.08, shadowing: 0.05, listening: -0.04, vocabulary: -0.03 },
     listening: { listening: 0.14, shadowing: 0.03, conversation: -0.04, vocabulary: -0.03 },
     vocabulary: { vocabulary: 0.14, review: 0.05, conversation: -0.04, shadowing: -0.03 },
-    pronunciation: { shadowing: 0.14, conversation: 0.04, vocabulary: -0.04, review: -0.02 },
+    pronunciation: { "speaking-coach": 0.12, shadowing: 0.1, conversation: 0.04, vocabulary: -0.04, review: -0.02 },
 };
 const levelBoost = {
     A1: { listening: 0.07, vocabulary: 0.05, conversation: -0.05 },
-    A2: { shadowing: 0.04, conversation: 0.03 },
+    A2: { shadowing: 0.04, "speaking-coach": 0.03, conversation: 0.03 },
     B1: { conversation: 0.07, review: 0.02, listening: -0.03 },
     B2: { conversation: 0.1, review: 0.03, vocabulary: -0.04 },
     C1: { conversation: 0.12, review: 0.04, listening: -0.04 },
@@ -62,7 +68,7 @@ const normalizeDifficulty = (difficulty) => {
 const goalBoost = (goal) => {
     const normalized = goal.toLowerCase();
     if (normalized.includes("meeting") || normalized.includes("speak") || normalized.includes("conversation")) {
-        return { conversation: 0.08, shadowing: 0.03 };
+        return { conversation: 0.08, "speaking-coach": 0.04, shadowing: 0.03 };
     }
     if (normalized.includes("listen") || normalized.includes("understand")) {
         return { listening: 0.08, vocabulary: 0.02 };

@@ -108,6 +108,34 @@ class AiController {
                 sendAiError(response, error, "AI daily plan generation failed");
             }
         };
+        this.speakingCoach = async (request, response) => {
+            try {
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
+                const { audioBase64, targetPhrase, focus, context, level, audioMimeType } = request.body;
+                if (!audioBase64?.trim()) {
+                    sendSafeError(response, 400, "audioBase64 is required");
+                    return;
+                }
+                if (!targetPhrase?.trim()) {
+                    sendSafeError(response, 400, "targetPhrase is required");
+                    return;
+                }
+                const result = await this.openAiService.analyzeSpeakingCoachAttempt({
+                    userId: request.auth.userId,
+                    audioBase64,
+                    audioMimeType,
+                    targetPhrase,
+                    focus,
+                    context,
+                    level,
+                });
+                response.json(result);
+            }
+            catch (error) {
+                sendAiError(response, error, "AI speaking coach analysis failed");
+            }
+        };
         this.analyzeMistake = async (request, response) => {
             try {
                 if (!request.auth?.userId)

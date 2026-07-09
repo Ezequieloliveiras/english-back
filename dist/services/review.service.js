@@ -7,7 +7,7 @@ class ReviewService {
         this.contentRepository = contentRepository;
     }
     async recordReview(userId, itemId, wasCorrect) {
-        const payload = await this.contentRepository.getLearningContent();
+        const payload = await this.contentRepository.getLearningContent(userId);
         const item = payload.vocabulary.find((entry) => entry.id === itemId);
         if (!item) {
             return null;

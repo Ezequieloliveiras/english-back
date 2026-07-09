@@ -1,8 +1,16 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { env } from "../config/env";
 import { AiRepository } from "../repositories/ai.repository";
+import { SettingsRepository, UserSettings } from "../repositories/settings.repository";
 
-type AiMode = "conversation" | "dev-mode" | "think-in-english" | "vocabulary" | "daily-plan" | "mistake";
+type AiMode =
+  | "conversation"
+  | "dev-mode"
+  | "think-in-english"
+  | "vocabulary"
+  | "daily-plan"
+  | "speaking-coach"
+  | "mistake";
 
 interface PreviousMessage {
   role: "user" | "assistant";
@@ -39,11 +47,47 @@ interface MistakeInput {
   level?: string;
 }
 
+interface SpeakingCoachInput {
+  userId: string;
+  audioBase64: string;
+  audioMimeType?: string;
+  targetPhrase: string;
+  focus?: string;
+  context?: string;
+  level?: string;
+}
+
 interface MistakeAnalysis {
   originalSentence: string;
   correctedSentence: string;
   mistakeType: string;
   explanation: string;
+}
+
+interface SpeakingCoachAnalysis {
+  overallScore: number;
+  metrics: Array<{
+    label: string;
+    value: number;
+  }>;
+  feedback: Array<{
+    title: string;
+    whatHappened: string;
+    whyItHappens: string;
+    whenToUse: string;
+    whenToAvoid: string;
+    drill: string;
+  }>;
+  strengths: string[];
+  improvements: string[];
+  nextMission: string;
+  nextPhrase: string;
+  patterns: Array<{
+    title: string;
+    evidence: string;
+    exercise: string;
+  }>;
+  mode: "ai" | "preview";
 }
 
 export interface AiReply {
@@ -97,10 +141,82 @@ const parseJson = <T>(text: string): T => {
 
 const limitMessages = (messages: PreviousMessage[] = []) => messages.slice(-8);
 
+const buildPreviewSpeakingCoachAnalysis = (input: Pick<SpeakingCoachInput, "targetPhrase">): SpeakingCoachAnalysis => ({
+  overallScore: 72,
+  mode: "preview",
+  metrics: [
+    { label: "Pronunciation Score", value: 74 },
+    { label: "Naturalness", value: 66 },
+    { label: "Connected Speech", value: 62 },
+    { label: "Stress", value: 70 },
+    { label: "Intonation", value: 68 },
+    { label: "Rhythm", value: 65 },
+    { label: "Fluency", value: 76 },
+  ],
+  feedback: [
+    {
+      title: "Voce pode estar pronunciando palavra por palavra.",
+      whatHappened:
+        "A gravacao foi recebida, mas a analise acustica real ainda depende da OpenAI configurada no backend.",
+      whyItHappens:
+        "Brasileiros geralmente aprendem ingles lendo, entao tendem a separar palavras que nativos conectam em blocos.",
+      whenToUse:
+        "Use connected speech em conversas naturais, respostas rapidas e reunioes informais.",
+      whenToAvoid:
+        "Evite reduzir demais em entrevistas formais, apresentacoes ou quando precisar falar muito claramente.",
+      drill: "Treine a frase em blocos curtos antes de falar tudo: I wanna / talk about / my routine.",
+    },
+  ],
+  strengths: ["Voce completou o ciclo de escutar, gravar e revisar.", "A frase alvo foi praticada em voz alta."],
+  improvements: ["Conectar palavras em blocos.", "Dar mais peso nas palavras principais.", "Evitar ritmo silabico demais."],
+  nextMission: "Repetir a frase com connected speech e stress em palavras de conteudo.",
+  nextPhrase: input.targetPhrase.includes("going")
+    ? "Did you kind of finish it already?"
+    : "I am going to check it after lunch.",
+  patterns: [
+    {
+      title: "Connected speech",
+      evidence: "Treinar reducoes como want to -> wanna e going to -> gonna.",
+      exercise: "Alternar versao clara e natural: want to / wanna.",
+    },
+    {
+      title: "Stress uniforme",
+      evidence: "A tendencia esperada e colocar energia parecida em todas as palavras.",
+      exercise: "Escolher 2 palavras fortes por frase e reduzir o resto.",
+    },
+  ],
+});
+
+const normalizeWords = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z'\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
+
+const countWords = (text: string) => normalizeWords(text).length;
+
+const findDifferentWords = (expectedText: string, transcribedText: string) => {
+  const expected = new Set(normalizeWords(expectedText));
+
+  return normalizeWords(transcribedText)
+    .filter((word) => !expected.has(word))
+    .slice(0, 12);
+};
+
+const metricsToMap = (metrics: SpeakingCoachAnalysis["metrics"]) =>
+  metrics.reduce<Record<string, number>>((acc, metric) => {
+    acc[metric.label] = metric.value;
+    return acc;
+  }, {});
+
 export class OpenAiService {
   private readonly client: OpenAI | null;
 
-  constructor(private readonly aiRepository: AiRepository) {
+  constructor(
+    private readonly aiRepository: AiRepository,
+    private readonly settingsRepository?: SettingsRepository
+  ) {
     this.client = env.openAiApiKey
       ? new OpenAI({ apiKey: env.openAiApiKey, maxRetries: 0, timeout: 20000 })
       : null;
@@ -241,6 +357,125 @@ Use os minutos disponiveis sem ultrapassar o total.
 `,
       userContent: JSON.stringify(input),
     });
+  }
+
+  async analyzeSpeakingCoachAttempt(input: SpeakingCoachInput): Promise<SpeakingCoachAnalysis> {
+    const settings = await this.getUserSettings(input.userId);
+
+    if (!this.client) {
+      return buildPreviewSpeakingCoachAnalysis(input);
+    }
+
+    try {
+      const audioBuffer = Buffer.from(input.audioBase64, "base64");
+      const audioFile = await toFile(audioBuffer, "speaking-coach.webm", {
+        type: input.audioMimeType ?? "audio/webm",
+      });
+      const transcription = await this.client.audio.transcriptions.create({
+        file: audioFile,
+        model: "gpt-4o-mini-transcribe",
+        language: "en",
+        prompt: `Target phrase: ${input.targetPhrase}`,
+      });
+
+      const result = await this.createJsonResponse<SpeakingCoachAnalysis>({
+        mode: "speaking-coach",
+        instructions: `
+Voce e um professor particular de pronuncia para brasileiros aprendendo ingles.
+Analise a tentativa do aluno comparando a transcricao com a frase alvo, mas nunca entregue apenas transcricao.
+Ensine como um professor experiente: explique o que aconteceu, por que acontece, quando usar e quando evitar.
+Foque em pronuncia, ritmo, stress, intonacao, connected speech, naturalidade e fluencia.
+Use exemplos naturais como want to -> wanna, going to -> gonna, did you -> didja, kind of -> kinda, out of -> outta, I don't know -> I dunno quando forem relevantes.
+Nunca diga apenas "errado". Sempre ensine.
+Preferencia do usuario:
+- languageMode: ${settings.languageMode}
+- preferredAccent: ${settings.preferredAccent}
+- correctionStyle: ${settings.correctionStyle}
+- primaryObjective: ${settings.primaryObjective}
+Se languageMode for "pt_explanation_en_correction", escreva explicacoes pedagogicas em portugues brasileiro claro, mas mantenha correction, naturalSuggestion, frases de fala e exemplos em ingles.
+Se languageMode for "full_english", escreva tudo em ingles simples, nivel A1/A2.
+Retorne JSON valido exatamente neste formato:
+{
+  "overallScore": 0,
+  "metrics": [
+    {"label":"Pronunciation Score","value":0},
+    {"label":"Naturalness","value":0},
+    {"label":"Connected Speech","value":0},
+    {"label":"Stress","value":0},
+    {"label":"Intonation","value":0},
+    {"label":"Rhythm","value":0},
+    {"label":"Fluency","value":0}
+  ],
+  "feedback": [
+    {
+      "title":"feedback curto",
+      "whatHappened":"explicacao curta",
+      "whyItHappens":"explicacao curta",
+      "whenToUse":"quando usar",
+      "whenToAvoid":"quando evitar",
+      "drill":"exercicio pratico"
+    }
+  ],
+  "strengths":["ponto forte"],
+  "improvements":["ponto para melhorar"],
+  "nextMission":"proxima missao",
+  "nextPhrase":"outra frase semelhante para praticar",
+  "patterns":[{"title":"padrao","evidence":"evidencia","exercise":"exercicio"}],
+  "mode":"ai"
+}
+`,
+        userContent: JSON.stringify({
+          targetPhrase: input.targetPhrase,
+          transcriptFromAudio: transcription.text,
+          focus: input.focus,
+          context: input.context,
+          level: input.level ?? "A1",
+        }),
+      });
+
+      const metrics = metricsToMap(result.metrics);
+      const correctedWords = findDifferentWords(input.targetPhrase, transcription.text);
+      await this.aiRepository.saveSpeakingAttempt({
+        userId: input.userId,
+        expectedText: input.targetPhrase,
+        transcribedText: transcription.text,
+        pronunciationScore: metrics["Pronunciation Score"] ?? result.overallScore,
+        naturalnessScore: metrics.Naturalness ?? result.overallScore,
+        connectedSpeechScore: metrics["Connected Speech"] ?? result.overallScore,
+        stressScore: metrics.Stress ?? result.overallScore,
+        intonationScore: metrics.Intonation ?? result.overallScore,
+        rhythmScore: metrics.Rhythm ?? result.overallScore,
+        fluencyScore: metrics.Fluency ?? result.overallScore,
+        wordsSpokenCount: countWords(transcription.text),
+        correctedWords,
+        feedback: result.feedback,
+        suggestion: result.nextPhrase,
+      });
+
+      return {
+        ...result,
+        mode: "ai",
+      };
+    } catch (error) {
+      console.error("[ai:speaking-coach] analysis failed", error instanceof Error ? error.message : error);
+      return buildPreviewSpeakingCoachAnalysis(input);
+    }
+  }
+
+  private async getUserSettings(userId: string): Promise<UserSettings> {
+    if (!this.settingsRepository) {
+      return {
+        userId,
+        languageMode: "pt_explanation_en_correction",
+        preferredAccent: "american",
+        correctionStyle: "gentle",
+        interfaceLanguage: "pt-BR",
+        primaryObjective: "conversation",
+        dailyMinutes: 20,
+      };
+    }
+
+    return this.settingsRepository.findOrCreate(userId);
   }
 
   async analyzeStudentMistake(input: MistakeInput) {

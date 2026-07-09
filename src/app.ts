@@ -85,6 +85,24 @@ app.use(
 app.use(cookieParser());
 app.use(express.json({ limit: "15mb" }));
 
+app.use(cookieParser());
+app.use(express.json());
+
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  console.log("────────────────────────────────────────");
+  console.log(`[${new Date().toISOString()}]`);
+  console.log(`${req.method} ${req.originalUrl}`);
+
+  res.on("finish", () => {
+    console.log(`→ ${res.statusCode} (${Date.now() - start}ms)`);
+    console.log("────────────────────────────────────────");
+  });
+
+  next();
+});
+
 app.use(
   "/api",
   buildRouter(

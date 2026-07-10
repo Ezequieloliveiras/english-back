@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   analyzePcmWav,
+  buildSpeakingCoachPipeline,
   comparePhraseToTranscript,
   deriveSpeakingMetrics,
   isSupportedSpeakingAudioMime,
@@ -24,6 +25,17 @@ const makeWav = (samples: Int16Array, sampleRate = 16000) => {
   buffer.writeUInt32LE(samples.length * 2, 40);
   samples.forEach((sample, index) => buffer.writeInt16LE(sample, 44 + index * 2));
   return buffer;
+};
+
+const validAudioQuality = {
+  durationSeconds: 2,
+  rms: 0.04,
+  peak: 0.2,
+  speechSeconds: 1.5,
+  speechRatio: 0.75,
+  silenceRatio: 0.25,
+  hasSpeech: true,
+  speechSegments: [{ start: 0.1, end: 1.8, duration: 1.7 }],
 };
 
 describe("speaking coach deterministic analysis", () => {
@@ -51,15 +63,7 @@ describe("speaking coach deterministic analysis", () => {
     expect(() =>
       validateTranscriptComparison(
         "The weather is nice today",
-        {
-          durationSeconds: 2,
-          rms: 0.04,
-          peak: 0.2,
-          speechSeconds: 1.5,
-          speechRatio: 0.75,
-          silenceRatio: 0.25,
-          hasSpeech: true,
-        },
+        validAudioQuality,
         comparison
       )
     ).toThrow("A gravação não corresponde");
@@ -71,15 +75,7 @@ describe("speaking coach deterministic analysis", () => {
     expect(() =>
       validateTranscriptComparison(
         "bla bla bla",
-        {
-          durationSeconds: 2,
-          rms: 0.04,
-          peak: 0.2,
-          speechSeconds: 1.5,
-          speechRatio: 0.75,
-          silenceRatio: 0.25,
-          hasSpeech: true,
-        },
+        validAudioQuality,
         comparison
       )
     ).toThrow("A gravação não corresponde");
@@ -88,15 +84,7 @@ describe("speaking coach deterministic analysis", () => {
   it("caps scores for low coverage and keeps metrics in 0-10", () => {
     const comparison = comparePhraseToTranscript("I want to talk about my routine.", "routine");
     const result = deriveSpeakingMetrics(
-      {
-        durationSeconds: 2,
-        rms: 0.04,
-        peak: 0.2,
-        speechSeconds: 1.5,
-        speechRatio: 0.75,
-        silenceRatio: 0.25,
-        hasSpeech: true,
-      },
+      validAudioQuality,
       comparison
     );
 
@@ -111,5 +99,15 @@ describe("speaking coach deterministic analysis", () => {
     expect(isSupportedSpeakingAudioMime("audio/webm")).toBe(true);
     expect(isSupportedSpeakingAudioMime("audio/wav")).toBe(true);
     expect(isSupportedSpeakingAudioMime("text/plain")).toBe(false);
+  });
+
+  it("builds local alignment, phoneme and rhythm analysis", () => {
+    const comparison = comparePhraseToTranscript("I want to talk about my routine.", "I want talk about my routine");
+    const pipeline = buildSpeakingCoachPipeline(validAudioQuality, comparison);
+
+    expect(pipeline.alignment.some((item) => item.status === "missing" && item.expectedWord === "to")).toBe(true);
+    expect(pipeline.phonemeAnalysis.score).toBeLessThan(10);
+    expect(pipeline.rhythmAnalysis.wordsPerMinute).toBeGreaterThan(0);
+    expect(pipeline.analysisEngine.forcedAlignment).toBe("local_energy_word_alignment");
   });
 });

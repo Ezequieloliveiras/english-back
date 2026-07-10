@@ -24,6 +24,7 @@ const speakingAttemptSchema = new Schema(
     transcriptSimilarity: { type: Number },
     analysisProvider: { type: String },
     analysisModel: { type: String },
+    analysisDetails: { type: Schema.Types.Mixed },
     audioMimeType: { type: String },
     status: { type: String, default: "ok" },
   },

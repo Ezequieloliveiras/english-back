@@ -4,7 +4,9 @@ import { AiRepository } from "../repositories/ai.repository";
 import { SettingsRepository, UserSettings } from "../repositories/settings.repository";
 import {
   SpeakingCoachStatus,
+  SpeakingCoachPipelineResult,
   SpeakingCoachValidationError,
+  buildSpeakingCoachPipeline,
   comparePhraseToTranscript,
   deriveSpeakingMetrics,
   normalizeAndAnalyzeAudio,
@@ -110,6 +112,10 @@ interface SpeakingCoachAnalysis {
     evidence: string;
     exercise: string;
   }>;
+  alignment?: SpeakingCoachPipelineResult["alignment"];
+  phonemeAnalysis?: SpeakingCoachPipelineResult["phonemeAnalysis"];
+  rhythmAnalysis?: SpeakingCoachPipelineResult["rhythmAnalysis"];
+  analysisEngine?: SpeakingCoachPipelineResult["analysisEngine"];
   mode: "ai";
 }
 
@@ -447,13 +453,17 @@ Use os minutos disponiveis sem ultrapassar o total.
       const transcript = transcription.text ?? "";
       const comparison = comparePhraseToTranscript(input.targetPhrase, transcript);
       validateTranscriptComparison(transcript, audioQuality, comparison);
-      const derived = deriveSpeakingMetrics(audioQuality, comparison);
+      const pipeline = buildSpeakingCoachPipeline(audioQuality, comparison);
+      const derived = deriveSpeakingMetrics(audioQuality, comparison, pipeline);
 
       console.info("[ai:speaking-coach] validated", {
         durationSeconds: audioQuality.durationSeconds,
         speechRatio: audioQuality.speechRatio,
+        speechSegments: audioQuality.speechSegments.length,
         words: comparison.spokenWords.length,
         coverage: comparison.coverage,
+        rhythmScore: pipeline.rhythmAnalysis.score,
+        phonemeScore: pipeline.phonemeAnalysis.score,
         status: "ok",
       });
 
@@ -467,6 +477,10 @@ Use ONLY the real evidence provided. Do not invent acoustic data.
 The scores were already calculated deterministically. Do not return scores.
 Teach like an experienced coach: explain what happened, why it happens, when to use it and when to avoid it.
 Focus on what is supported by the transcript, target coverage, missing/extra words, duration, volume and speech ratio.
+Also use forcedAlignment, phonemeAnalysis and rhythmAnalysis when provided. These are deterministic local analysis results.
+If phonemeAnalysis has issues, explain the specific word/sound only when it is present in the evidence.
+If rhythmAnalysis shows low WPM, long pauses or low speech ratio, explain rhythm/fluency from those values.
+Do not claim tongue position, mouth shape or native-level acoustic facts unless the evidence explicitly supports it.
 Use natural examples such as want to -> wanna, going to -> gonna, did you -> didja, kind of -> kinda, out of -> outta, I don't know -> I dunno when relevant.
 Never just say "wrong". Always teach.
 User preferences:
@@ -504,6 +518,10 @@ Return valid JSON exactly in this format:
           targetPhrase: input.targetPhrase,
           transcriptFromAudio: transcript,
           audioQuality,
+          forcedAlignment: pipeline.alignment,
+          phonemeAnalysis: pipeline.phonemeAnalysis,
+          rhythmAnalysis: pipeline.rhythmAnalysis,
+          analysisEngine: pipeline.analysisEngine,
           comparison: {
             coverage: comparison.coverage,
             similarity: comparison.similarity,
@@ -545,6 +563,10 @@ Return valid JSON exactly in this format:
         nextMission: localizedFeedbackResult.nextMission ?? "Repita a frase mantendo clareza e ritmo natural.",
         nextPhrase: localizedFeedbackResult.nextPhrase ?? input.targetPhrase,
         patterns: localizedFeedbackResult.patterns ?? [],
+        alignment: pipeline.alignment,
+        phonemeAnalysis: pipeline.phonemeAnalysis,
+        rhythmAnalysis: pipeline.rhythmAnalysis,
+        analysisEngine: pipeline.analysisEngine,
         mode: "ai",
       };
       const localizedResult = result;
@@ -570,7 +592,13 @@ Return valid JSON exactly in this format:
         transcriptCoverage: comparison.coverage,
         transcriptSimilarity: comparison.similarity,
         analysisProvider: "openai",
-        analysisModel: "gpt-4o-mini-transcribe+deterministic",
+        analysisModel: "gpt-4o-mini-transcribe+local-alignment-phoneme-rhythm",
+        analysisDetails: {
+          alignment: pipeline.alignment,
+          phonemeAnalysis: pipeline.phonemeAnalysis,
+          rhythmAnalysis: pipeline.rhythmAnalysis,
+          analysisEngine: pipeline.analysisEngine,
+        },
         audioMimeType: input.audioMimeType,
         status: "ok",
       });

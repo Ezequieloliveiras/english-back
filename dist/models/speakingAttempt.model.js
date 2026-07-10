@@ -25,6 +25,7 @@ const speakingAttemptSchema = new mongoose_1.Schema({
     transcriptSimilarity: { type: Number },
     analysisProvider: { type: String },
     analysisModel: { type: String },
+    analysisDetails: { type: mongoose_1.Schema.Types.Mixed },
     audioMimeType: { type: String },
     status: { type: String, default: "ok" },
 }, { timestamps: true });

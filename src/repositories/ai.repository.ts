@@ -50,6 +50,7 @@ interface SaveSpeakingAttemptInput {
   transcriptSimilarity?: number;
   analysisProvider?: string;
   analysisModel?: string;
+  analysisDetails?: unknown;
   audioMimeType?: string;
   status?: string;
 }

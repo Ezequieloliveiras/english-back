@@ -76,6 +76,7 @@ app.use(
   cors({
     origin: env.corsOrigin,
     credentials: true,
+    exposedHeaders: ["X-Audio-Cache", "X-Audio-Cacheable", "X-Audio-Expires-At", "X-Audio-Cache-Key"],
   })
 );
 app.use(

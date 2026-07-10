@@ -52,6 +52,38 @@ const sanitizeProviderMessage = (message: string) =>
     .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-api-key]")
     .replace(/sk-proj-[A-Za-z0-9_-]+/g, "[redacted-api-key]");
 
+type TimedWord = {
+  word: string;
+  start: number;
+  end: number;
+};
+
+const normalizeTimedWords = (input: unknown): TimedWord[] => {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const candidate = item as Record<string, unknown>;
+      const word = typeof candidate.word === "string" ? candidate.word : "";
+      const start = Number(candidate.start);
+      const end = Number(candidate.end);
+
+      if (!word || !Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+        return null;
+      }
+
+      return { word, start, end };
+    })
+    .filter((item): item is TimedWord => item !== null)
+    .sort((a, b) => a.start - b.start);
+};
+
 export class AudioProviderError extends Error {
   constructor(
     message: string,
@@ -270,11 +302,7 @@ export class AudioService {
       timestamp_granularities: ["word"],
     });
 
-    const words = (transcription.words ?? []).map((word: any) => ({
-      word: String(word.word ?? ""),
-      start: Number(word.start ?? 0),
-      end: Number(word.end ?? 0),
-    })).filter((word) => word.word && word.end >= word.start);
+    const words = normalizeTimedWords(transcription.words);
 
     return {
       ...generated,

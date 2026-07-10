@@ -72,6 +72,7 @@ exports.app.use((0, helmet_1.default)());
 exports.app.use((0, cors_1.default)({
     origin: env_1.env.corsOrigin,
     credentials: true,
+    exposedHeaders: ["X-Audio-Cache", "X-Audio-Cacheable", "X-Audio-Expires-At", "X-Audio-Cache-Key"],
 }));
 exports.app.use((0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,

@@ -70,6 +70,27 @@ const buildOpenAiSpeechInstructions = (speed) => {
 const sanitizeProviderMessage = (message) => message
     .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-api-key]")
     .replace(/sk-proj-[A-Za-z0-9_-]+/g, "[redacted-api-key]");
+const normalizeTimedWords = (input) => {
+    if (!Array.isArray(input)) {
+        return [];
+    }
+    return input
+        .map((item) => {
+        if (!item || typeof item !== "object") {
+            return null;
+        }
+        const candidate = item;
+        const word = typeof candidate.word === "string" ? candidate.word : "";
+        const start = Number(candidate.start);
+        const end = Number(candidate.end);
+        if (!word || !Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+            return null;
+        }
+        return { word, start, end };
+    })
+        .filter((item) => item !== null)
+        .sort((a, b) => a.start - b.start);
+};
 class AudioProviderError extends Error {
     constructor(message, statusCode = 400, provider = "audio") {
         super(message);
@@ -248,11 +269,7 @@ class AudioService {
             response_format: "verbose_json",
             timestamp_granularities: ["word"],
         });
-        const words = (transcription.words ?? []).map((word) => ({
-            word: String(word.word ?? ""),
-            start: Number(word.start ?? 0),
-            end: Number(word.end ?? 0),
-        })).filter((word) => word.word && word.end >= word.start);
+        const words = normalizeTimedWords(transcription.words);
         return {
             ...generated,
             words,

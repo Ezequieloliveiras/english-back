@@ -187,6 +187,46 @@ const buildPreviewSpeakingCoachAnalysis = (input: Pick<SpeakingCoachInput, "targ
   ],
 });
 
+const translateKnownSpeakingCoachText = (value: string) => {
+  const normalized = value.trim();
+  const dictionary: Record<string, string> = {
+    "Using 'want to' vs 'wanna'": "Usando 'want to' e 'wanna'",
+    "Using ‘want to’ vs ‘wanna’": "Usando 'want to' e 'wanna'",
+    "You said 'want to' clearly, which is correct but sounds more formal.":
+      "Você disse 'want to' de forma clara; isso está correto, mas soa mais formal.",
+    "'Want to' is two words and people often link them quickly in speech to sound more natural.":
+      "'Want to' tem duas palavras, e as pessoas costumam conectar esses sons rapidamente para soar mais natural.",
+    "Use 'wanna' in informal speaking, like with friends or casual talks.":
+      "Use 'wanna' em fala informal, como em conversas com amigos ou bate-papos casuais.",
+    "Avoid 'wanna' in formal writing or professional talks.":
+      "Evite 'wanna' em escrita formal ou em conversas profissionais mais cuidadosas.",
+    "Practice saying 'I wanna talk about my routine.' slowly, then faster, to get natural.":
+      "Pratique dizendo 'I wanna talk about my routine.' devagar primeiro; depois acelere para soar natural.",
+  };
+
+  return dictionary[normalized] ?? value;
+};
+
+const ensurePortugueseSpeakingCoachAnalysis = (analysis: SpeakingCoachAnalysis): SpeakingCoachAnalysis => ({
+  ...analysis,
+  feedback: analysis.feedback.map((item) => ({
+    title: translateKnownSpeakingCoachText(item.title),
+    whatHappened: translateKnownSpeakingCoachText(item.whatHappened),
+    whyItHappens: translateKnownSpeakingCoachText(item.whyItHappens),
+    whenToUse: translateKnownSpeakingCoachText(item.whenToUse),
+    whenToAvoid: translateKnownSpeakingCoachText(item.whenToAvoid),
+    drill: translateKnownSpeakingCoachText(item.drill),
+  })),
+  strengths: analysis.strengths.map(translateKnownSpeakingCoachText),
+  improvements: analysis.improvements.map(translateKnownSpeakingCoachText),
+  nextMission: translateKnownSpeakingCoachText(analysis.nextMission),
+  patterns: analysis.patterns.map((item) => ({
+    title: translateKnownSpeakingCoachText(item.title),
+    evidence: translateKnownSpeakingCoachText(item.evidence),
+    exercise: translateKnownSpeakingCoachText(item.exercise),
+  })),
+});
+
 const normalizeWords = (text: string) =>
   text
     .toLowerCase()
@@ -395,6 +435,10 @@ Preferencia do usuario:
 - primaryObjective: ${settings.primaryObjective}
 Se languageMode for "pt_explanation_en_correction", escreva explicacoes pedagogicas em portugues brasileiro claro, mas mantenha correction, naturalSuggestion, frases de fala e exemplos em ingles.
 Se languageMode for "full_english", escreva tudo em ingles simples, nivel A1/A2.
+IMPORTANTE: Para usuarios brasileiros, todos os campos pedagogicos abaixo devem estar em portugues brasileiro:
+title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence e patterns.exercise.
+Mantenha em ingles apenas as frases citadas literalmente, como "want to", "wanna" e "I wanna talk about my routine.".
+Exemplo de tom esperado: "Você disse 'want to' de forma clara; isso está correto, mas soa mais formal."
 Retorne JSON valido exatamente neste formato:
 {
   "overallScore": 0,
@@ -434,27 +478,29 @@ Retorne JSON valido exatamente neste formato:
         }),
       });
 
-      const metrics = metricsToMap(result.metrics);
+      const localizedResult =
+        settings.languageMode === "full_english" ? result : ensurePortugueseSpeakingCoachAnalysis(result);
+      const metrics = metricsToMap(localizedResult.metrics);
       const correctedWords = findDifferentWords(input.targetPhrase, transcription.text);
       await this.aiRepository.saveSpeakingAttempt({
         userId: input.userId,
         expectedText: input.targetPhrase,
         transcribedText: transcription.text,
-        pronunciationScore: metrics["Pronunciation Score"] ?? result.overallScore,
-        naturalnessScore: metrics.Naturalness ?? result.overallScore,
-        connectedSpeechScore: metrics["Connected Speech"] ?? result.overallScore,
-        stressScore: metrics.Stress ?? result.overallScore,
-        intonationScore: metrics.Intonation ?? result.overallScore,
-        rhythmScore: metrics.Rhythm ?? result.overallScore,
-        fluencyScore: metrics.Fluency ?? result.overallScore,
+        pronunciationScore: metrics["Pronunciation Score"] ?? localizedResult.overallScore,
+        naturalnessScore: metrics.Naturalness ?? localizedResult.overallScore,
+        connectedSpeechScore: metrics["Connected Speech"] ?? localizedResult.overallScore,
+        stressScore: metrics.Stress ?? localizedResult.overallScore,
+        intonationScore: metrics.Intonation ?? localizedResult.overallScore,
+        rhythmScore: metrics.Rhythm ?? localizedResult.overallScore,
+        fluencyScore: metrics.Fluency ?? localizedResult.overallScore,
         wordsSpokenCount: countWords(transcription.text),
         correctedWords,
-        feedback: result.feedback,
-        suggestion: result.nextPhrase,
+        feedback: localizedResult.feedback,
+        suggestion: localizedResult.nextPhrase,
       });
 
       return {
-        ...result,
+        ...localizedResult,
         mode: "ai",
       };
     } catch (error) {

@@ -2,7 +2,7 @@ import { dashboardSeed } from "../data/seedData";
 import { ContentCatalogModel } from "../models/contentCatalog.model";
 import { ReviewScheduleModel } from "../models/reviewSchedule.model";
 import { VocabularyItemModel } from "../models/vocabularyItem.model";
-import { DashboardPayload, VocabularyItem } from "../types";
+import { DashboardPayload, ListeningLesson, VocabularyItem } from "../types";
 
 const toPlainVocabulary = (item: any): VocabularyItem => ({
   id: String(item._id ?? item.id),
@@ -20,6 +20,28 @@ const toPlainVocabulary = (item: any): VocabularyItem => ({
   timesCorrect: item.timesCorrect ?? item.hits,
   timesWrong: item.timesWrong ?? item.misses,
 });
+
+const hydrateListeningLessons = (lessons: ListeningLesson[] = []) => {
+  const seedById = new Map(dashboardSeed.listeningLessons.map((lesson) => [lesson.id, lesson]));
+
+  return lessons.map((lesson) => {
+    const seedLesson = seedById.get(lesson.id);
+
+    if (!seedLesson) {
+      return lesson;
+    }
+
+    return {
+      ...seedLesson,
+      ...lesson,
+      imageUrl: lesson.imageUrl ?? seedLesson.imageUrl,
+      imageSource: lesson.imageSource ?? seedLesson.imageSource,
+      imageAlt: lesson.imageAlt ?? seedLesson.imageAlt,
+      situationDescription: lesson.situationDescription ?? seedLesson.situationDescription,
+      comprehension: lesson.comprehension?.length ? lesson.comprehension : seedLesson.comprehension,
+    };
+  });
+};
 
 export class ContentRepository {
   private async seedCatalogIfNeeded() {
@@ -66,7 +88,7 @@ export class ContentRepository {
 
     return {
       vocabulary: vocabulary.map(toPlainVocabulary),
-      listeningLessons: byKey.get("listeningLessons") ?? [],
+      listeningLessons: hydrateListeningLessons(byKey.get("listeningLessons") ?? dashboardSeed.listeningLessons),
       shadowingItems: byKey.get("shadowingItems") ?? [],
       conversationModes: byKey.get("conversationModes") ?? [],
       developerModes: byKey.get("developerModes") ?? [],

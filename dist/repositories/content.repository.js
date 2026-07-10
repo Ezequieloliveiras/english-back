@@ -21,6 +21,24 @@ const toPlainVocabulary = (item) => ({
     timesCorrect: item.timesCorrect ?? item.hits,
     timesWrong: item.timesWrong ?? item.misses,
 });
+const hydrateListeningLessons = (lessons = []) => {
+    const seedById = new Map(seedData_1.dashboardSeed.listeningLessons.map((lesson) => [lesson.id, lesson]));
+    return lessons.map((lesson) => {
+        const seedLesson = seedById.get(lesson.id);
+        if (!seedLesson) {
+            return lesson;
+        }
+        return {
+            ...seedLesson,
+            ...lesson,
+            imageUrl: lesson.imageUrl ?? seedLesson.imageUrl,
+            imageSource: lesson.imageSource ?? seedLesson.imageSource,
+            imageAlt: lesson.imageAlt ?? seedLesson.imageAlt,
+            situationDescription: lesson.situationDescription ?? seedLesson.situationDescription,
+            comprehension: lesson.comprehension?.length ? lesson.comprehension : seedLesson.comprehension,
+        };
+    });
+};
 class ContentRepository {
     async seedCatalogIfNeeded() {
         const [vocabularyCount, catalogCount] = await Promise.all([
@@ -59,7 +77,7 @@ class ContentRepository {
         const byKey = new Map(catalogs.map((catalog) => [catalog.key, catalog.items]));
         return {
             vocabulary: vocabulary.map(toPlainVocabulary),
-            listeningLessons: byKey.get("listeningLessons") ?? [],
+            listeningLessons: hydrateListeningLessons(byKey.get("listeningLessons") ?? seedData_1.dashboardSeed.listeningLessons),
             shadowingItems: byKey.get("shadowingItems") ?? [],
             conversationModes: byKey.get("conversationModes") ?? [],
             developerModes: byKey.get("developerModes") ?? [],

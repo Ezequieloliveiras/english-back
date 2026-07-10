@@ -11,6 +11,7 @@ const isDatabaseReady = () => mongoose_1.default.connection.readyState === 1;
 const defaultSettings = (userId) => ({
     userId,
     languageMode: "pt_explanation_en_correction",
+    supportLanguageMode: "moderate_support",
     preferredAccent: "american",
     correctionStyle: "gentle",
     interfaceLanguage: "pt-BR",
@@ -21,6 +22,7 @@ const memorySettings = new Map();
 const mapSettings = (settings) => ({
     userId: String(settings.userId),
     languageMode: settings.languageMode,
+    supportLanguageMode: settings.supportLanguageMode ?? "moderate_support",
     preferredAccent: settings.preferredAccent,
     correctionStyle: settings.correctionStyle,
     interfaceLanguage: settings.interfaceLanguage,
@@ -36,6 +38,12 @@ const coerceSettings = (userId, input) => {
         languageMode: input.languageMode === "full_english" || input.languageMode === "pt_explanation_en_correction"
             ? input.languageMode
             : base.languageMode,
+        supportLanguageMode: input.supportLanguageMode === "full_portuguese_support" ||
+            input.supportLanguageMode === "moderate_support" ||
+            input.supportLanguageMode === "guided_immersion" ||
+            input.supportLanguageMode === "english_only"
+            ? input.supportLanguageMode
+            : base.supportLanguageMode,
         preferredAccent: input.preferredAccent === "british" || input.preferredAccent === "neutral" || input.preferredAccent === "american"
             ? input.preferredAccent
             : base.preferredAccent,

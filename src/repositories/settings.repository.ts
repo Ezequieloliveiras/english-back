@@ -3,6 +3,11 @@ import { UserModel } from "../models/user.model";
 import { UserSettingsModel } from "../models/userSettings.model";
 
 export type LanguageMode = "pt_explanation_en_correction" | "full_english";
+export type SupportLanguageMode =
+  | "full_portuguese_support"
+  | "moderate_support"
+  | "guided_immersion"
+  | "english_only";
 export type PreferredAccent = "american" | "british" | "neutral";
 export type CorrectionStyle = "gentle" | "direct" | "detailed";
 export type PrimaryObjective = "conversation" | "interview" | "work" | "travel" | "technical_english";
@@ -10,6 +15,7 @@ export type PrimaryObjective = "conversation" | "interview" | "work" | "travel" 
 export interface UserSettings {
   userId: string;
   languageMode: LanguageMode;
+  supportLanguageMode: SupportLanguageMode;
   preferredAccent: PreferredAccent;
   correctionStyle: CorrectionStyle;
   interfaceLanguage: "pt-BR" | "en";
@@ -24,6 +30,7 @@ const isDatabaseReady = () => mongoose.connection.readyState === 1;
 const defaultSettings = (userId: string): UserSettings => ({
   userId,
   languageMode: "pt_explanation_en_correction",
+  supportLanguageMode: "moderate_support",
   preferredAccent: "american",
   correctionStyle: "gentle",
   interfaceLanguage: "pt-BR",
@@ -36,6 +43,7 @@ const memorySettings = new Map<string, UserSettings>();
 const mapSettings = (settings: any): UserSettings => ({
   userId: String(settings.userId),
   languageMode: settings.languageMode,
+  supportLanguageMode: settings.supportLanguageMode ?? "moderate_support",
   preferredAccent: settings.preferredAccent,
   correctionStyle: settings.correctionStyle,
   interfaceLanguage: settings.interfaceLanguage,
@@ -54,6 +62,13 @@ const coerceSettings = (userId: string, input: Partial<UserSettings>): UserSetti
       input.languageMode === "full_english" || input.languageMode === "pt_explanation_en_correction"
         ? input.languageMode
         : base.languageMode,
+    supportLanguageMode:
+      input.supportLanguageMode === "full_portuguese_support" ||
+      input.supportLanguageMode === "moderate_support" ||
+      input.supportLanguageMode === "guided_immersion" ||
+      input.supportLanguageMode === "english_only"
+        ? input.supportLanguageMode
+        : base.supportLanguageMode,
     preferredAccent:
       input.preferredAccent === "british" || input.preferredAccent === "neutral" || input.preferredAccent === "american"
         ? input.preferredAccent

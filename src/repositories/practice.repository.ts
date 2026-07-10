@@ -1,3 +1,4 @@
+import { ListeningAttemptModel } from "../models/listeningAttempt.model";
 import { PracticeActivityModel } from "../models/practiceActivity.model";
 
 export class PracticeRepository {
@@ -18,5 +19,23 @@ export class PracticeRepository {
       },
       { new: true, upsert: true }
     );
+  }
+
+  async saveListeningAttempt(input: {
+    userId: string;
+    exerciseId: string;
+    expectedText: string;
+    selectedMeaning?: string;
+    comprehensionCorrect: boolean;
+    translationOpened: boolean;
+    transcriptOpened: boolean;
+    slowAudioUsed: boolean;
+    replayCount: number;
+    unknownWords: string[];
+  }) {
+    return ListeningAttemptModel.create({
+      ...input,
+      completedAt: new Date(),
+    });
   }
 }

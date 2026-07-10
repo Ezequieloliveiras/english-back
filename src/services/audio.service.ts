@@ -1,4 +1,5 @@
 import { env } from "../config/env";
+import OpenAI, { toFile } from "openai";
 import { AudioCacheRepository } from "../repositories/audioCache.repository";
 import { AudioStorageService } from "./audioStorage.service";
 import {
@@ -62,6 +63,8 @@ export class AudioProviderError extends Error {
 }
 
 export class AudioService {
+  private readonly client = env.openAiApiKey ? new OpenAI({ apiKey: env.openAiApiKey }) : null;
+
   constructor(
     private readonly audioCacheRepository?: AudioCacheRepository,
     private readonly audioStorageService = new AudioStorageService()
@@ -229,6 +232,53 @@ export class AudioService {
       cache: shouldCache ? ("MISS" as const) : ("BYPASS" as const),
       cacheKey,
       cacheable: false,
+    };
+  }
+
+  async createAlignedSpeech(input: {
+    provider?: string;
+    text?: string;
+    voice?: string;
+    speed?: number;
+    model?: string;
+    language?: string;
+    accent?: string;
+    audioType?: AudioType;
+    cacheable?: boolean;
+    version?: string;
+  }) {
+    if (!this.client) {
+      throw new Error("OPENAI_API_KEY is required for word-level audio alignment");
+    }
+
+    const generated = await this.createSpeech({
+      ...input,
+      provider: input.provider || "openai",
+      audioType: input.audioType || "training_phrase",
+      cacheable: input.cacheable ?? true,
+    });
+
+    const audioFile = await toFile(generated.buffer, "aligned-speech.mp3", {
+      type: generated.contentType,
+    });
+
+    const transcription = await this.client.audio.transcriptions.create({
+      file: audioFile,
+      model: "whisper-1",
+      language: input.language || "en",
+      response_format: "verbose_json",
+      timestamp_granularities: ["word"],
+    });
+
+    const words = (transcription.words ?? []).map((word: any) => ({
+      word: String(word.word ?? ""),
+      start: Number(word.start ?? 0),
+      end: Number(word.end ?? 0),
+    })).filter((word) => word.word && word.end >= word.start);
+
+    return {
+      ...generated,
+      words,
     };
   }
 

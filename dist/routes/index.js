@@ -16,6 +16,7 @@ const buildRouter = (contentController, audioController, authController, convers
     router.patch("/settings", auth_middleware_1.requireAuth, settingsController.update);
     router.get("/audio/providers", auth_middleware_1.requireAuth, audioController.providers);
     router.post("/audio/speech", auth_middleware_1.requireAuth, audioController.speech);
+    router.post("/audio/aligned-speech", auth_middleware_1.requireAuth, audioController.alignedSpeech);
     router.get("/content/bootstrap", auth_middleware_1.requireAuth, contentController.getBootstrap);
     router.post("/conversations/reply", auth_middleware_1.requireAuth, conversationController.reply);
     router.post("/reviews/record", auth_middleware_1.requireAuth, reviewController.record);
@@ -30,6 +31,7 @@ const buildRouter = (contentController, audioController, authController, convers
     router.post("/ai/speaking-coach", auth_middleware_1.requireAuth, aiController.speakingCoach);
     router.post("/ai/analyze-mistake", auth_middleware_1.requireAuth, aiController.analyzeMistake);
     router.post("/practice/complete", auth_middleware_1.requireAuth, practiceController.complete);
+    router.post("/practice/listening-attempts", auth_middleware_1.requireAuth, practiceController.listeningAttempt);
     return router;
 };
 exports.buildRouter = buildRouter;

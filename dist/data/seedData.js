@@ -158,6 +158,10 @@ const listeningLessons = [
         id: "l1",
         title: "Morning Standup",
         level: "A2",
+        imageUrl: "/listening-morning-standup.svg",
+        imageSource: "library",
+        imageAlt: "Pequena equipe participando de uma reunião rápida de trabalho em um escritório.",
+        situationDescription: "Uma conversa curta de daily standup entre colegas de trabalho.",
         dialogue: [
             "Anna: Good morning. What are you working on today?",
             "Leo: I am fixing the login flow and writing two tests.",
@@ -168,11 +172,62 @@ const listeningLessons = [
             { id: "q1", prompt: "What is Leo working on?", answer: "The login flow and two tests." },
             { id: "q2", prompt: "What blocker does Leo have?", answer: "He needs access to the staging logs." },
         ],
+        comprehension: [
+            {
+                sourceText: "Good morning. What are you working on today?",
+                naturalTranslation: "Bom dia. Em que você está trabalhando hoje?",
+                context: "Use para começar uma conversa de trabalho e perguntar o foco do dia.",
+            },
+            {
+                sourceText: "I am fixing the login flow and writing two tests.",
+                naturalTranslation: "Estou corrigindo o fluxo de login e escrevendo dois testes.",
+                chunks: [
+                    { text: "I am fixing", meaning: "Estou corrigindo" },
+                    { text: "the login flow", meaning: "o fluxo de login" },
+                    { text: "and writing two tests", meaning: "e escrevendo dois testes" },
+                ],
+                context: "Use para dar um update simples em uma reuniao de trabalho.",
+                importantWords: [
+                    { text: "fixing", meaning: "corrigindo" },
+                    { text: "login flow", meaning: "fluxo de login" },
+                ],
+                pronunciationTip: "'fixing the' deve sair em um ritmo unico, sem pausar entre as palavras.",
+                additionalExample: "I am fixing the checkout flow.",
+            },
+            {
+                sourceText: "Do you have any blockers?",
+                naturalTranslation: "Você tem algum bloqueio?",
+                context: "Use em reuniões para perguntar se algo está impedindo o progresso.",
+                chunks: [
+                    { text: "Do you have", meaning: "Você tem" },
+                    { text: "any blockers", meaning: "algum bloqueio" },
+                ],
+            },
+            {
+                sourceText: "Yes, I need access to the staging logs.",
+                naturalTranslation: "Sim, preciso de acesso aos logs de staging.",
+                chunks: [
+                    { text: "I need access", meaning: "preciso de acesso" },
+                    { text: "to the staging logs", meaning: "aos logs de staging" },
+                ],
+                context: "Use quando voce precisa explicar um bloqueio tecnico.",
+                importantWords: [
+                    { text: "access", meaning: "acesso" },
+                    { text: "staging logs", meaning: "logs do ambiente de staging" },
+                ],
+                pronunciationTip: "'need access' pode soar conectado, com o /d/ ligando ao som de vogal.",
+                additionalExample: "I need access to the admin panel.",
+            },
+        ],
     },
     {
         id: "l2",
         title: "At the Airport",
         level: "A1",
+        imageUrl: "/listening-airport.svg",
+        imageSource: "library",
+        imageAlt: "Passageiro conversando com uma atendente no balcão de check-in de um aeroporto.",
+        situationDescription: "Um passageiro responde perguntas simples no balcão de check-in.",
         dialogue: [
             "Agent: Where are you flying today?",
             "Passenger: I am going to Toronto for a conference.",
@@ -182,6 +237,41 @@ const listeningLessons = [
         questions: [
             { id: "q3", prompt: "Where is the passenger going?", answer: "Toronto." },
             { id: "q4", prompt: "How many bags will be checked?", answer: "One suitcase." },
+        ],
+        comprehension: [
+            {
+                sourceText: "Where are you flying today?",
+                naturalTranslation: "Para onde você está voando hoje?",
+                context: "Pergunta comum no check-in do aeroporto.",
+            },
+            {
+                sourceText: "I am going to Toronto for a conference.",
+                naturalTranslation: "Vou para Toronto para uma conferencia.",
+                chunks: [
+                    { text: "I am going to Toronto", meaning: "Vou para Toronto" },
+                    { text: "for a conference", meaning: "para uma conferencia" },
+                ],
+                context: "Use para explicar destino e motivo de viagem.",
+                importantWords: [
+                    { text: "going to", meaning: "indo para" },
+                    { text: "conference", meaning: "conferencia" },
+                ],
+                pronunciationTip: "'going to' pode soar como 'gonna' em fala informal, mas no aeroporto a forma clara tambem funciona bem.",
+                additionalExample: "I am going to Berlin for a workshop.",
+            },
+            {
+                sourceText: "Do you have any bags to check?",
+                naturalTranslation: "Você tem alguma mala para despachar?",
+                context: "Use quando o atendente precisa confirmar bagagem.",
+                chunks: [
+                    { text: "bags to check", meaning: "malas para despachar" },
+                ],
+            },
+            {
+                sourceText: "Yes, just one suitcase.",
+                naturalTranslation: "Sim, apenas uma mala.",
+                context: "Resposta simples para confirmar quantidade de bagagem.",
+            },
         ],
     },
 ];
@@ -200,6 +290,37 @@ const shadowingItems = [
         id: "s3",
         phrase: "Could you walk me through the next steps?",
         pronunciationHint: "Reduce 'could you' to sound more natural.",
+        naturalTranslation: "Voce poderia me explicar os proximos passos?",
+        chunks: [
+            { text: "Could you", meaning: "Voce poderia" },
+            { text: "walk me through", meaning: "me explicar passo a passo" },
+            { text: "the next steps", meaning: "os proximos passos" },
+        ],
+        context: "Use quando voce quer que alguem explique um processo com calma.",
+        importantWords: [
+            { text: "walk me through", meaning: "explicar passo a passo" },
+            { text: "next steps", meaning: "proximos passos" },
+        ],
+        pronunciationTip: "'could you' pode soar como 'couldja' em fala natural.",
+        additionalExample: "Could you walk me through the setup?",
+    },
+    {
+        id: "s4",
+        phrase: "I need a few more minutes to finish this task.",
+        pronunciationHint: "'need a' can connect naturally, close to 'needa'.",
+        naturalTranslation: "Preciso de mais alguns minutos para terminar esta tarefa.",
+        chunks: [
+            { text: "I need", meaning: "Eu preciso" },
+            { text: "a few more minutes", meaning: "de mais alguns minutos" },
+            { text: "to finish this task", meaning: "para terminar esta tarefa" },
+        ],
+        context: "Use quando voce precisa pedir um pouco mais de tempo no trabalho.",
+        importantWords: [
+            { text: "a few more minutes", meaning: "mais alguns minutos" },
+            { text: "finish this task", meaning: "terminar esta tarefa" },
+        ],
+        pronunciationTip: "'need a' pode soar conectado, próximo de 'needa'.",
+        additionalExample: "I need a few more minutes to review this pull request.",
     },
 ];
 const thinkInEnglishPrompts = [
@@ -233,6 +354,7 @@ exports.dashboardSeed = {
     settings: {
         userId: "seed-user-template",
         languageMode: "pt_explanation_en_correction",
+        supportLanguageMode: "moderate_support",
         preferredAccent: "american",
         correctionStyle: "gentle",
         interfaceLanguage: "pt-BR",

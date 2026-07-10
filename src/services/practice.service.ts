@@ -32,4 +32,45 @@ export class PracticeService {
       },
     };
   }
+
+  async saveListeningAttempt(input: {
+    userId: string;
+    exerciseId?: string;
+    expectedText?: string;
+    selectedMeaning?: string;
+    comprehensionCorrect?: boolean;
+    translationOpened?: boolean;
+    transcriptOpened?: boolean;
+    slowAudioUsed?: boolean;
+    replayCount?: number;
+    unknownWords?: string[];
+  }) {
+    if (!input.exerciseId || !input.expectedText) {
+      return { status: 400, body: { message: "exerciseId and expectedText are required" } };
+    }
+
+    const attempt = await this.practiceRepository.saveListeningAttempt({
+      userId: input.userId,
+      exerciseId: input.exerciseId,
+      expectedText: input.expectedText,
+      selectedMeaning: input.selectedMeaning,
+      comprehensionCorrect: Boolean(input.comprehensionCorrect),
+      translationOpened: Boolean(input.translationOpened),
+      transcriptOpened: Boolean(input.transcriptOpened),
+      slowAudioUsed: Boolean(input.slowAudioUsed),
+      replayCount: Math.max(0, Number(input.replayCount ?? 0)),
+      unknownWords: Array.isArray(input.unknownWords) ? input.unknownWords : [],
+    });
+
+    return {
+      status: 201,
+      body: {
+        id: String(attempt._id),
+        exerciseId: attempt.exerciseId,
+        expectedText: attempt.expectedText,
+        comprehensionCorrect: attempt.comprehensionCorrect,
+        completedAt: attempt.completedAt,
+      },
+    };
+  }
 }

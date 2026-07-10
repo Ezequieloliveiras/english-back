@@ -10,6 +10,12 @@ const userSettingsSchema = new mongoose_1.Schema({
         default: "pt_explanation_en_correction",
         enum: ["pt_explanation_en_correction", "full_english"],
     },
+    supportLanguageMode: {
+        type: String,
+        required: true,
+        default: "moderate_support",
+        enum: ["full_portuguese_support", "moderate_support", "guided_immersion", "english_only"],
+    },
     preferredAccent: {
         type: String,
         required: true,

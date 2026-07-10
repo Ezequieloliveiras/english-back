@@ -38,6 +38,7 @@ export const buildRouter = (
 
   router.get("/audio/providers", requireAuth, audioController.providers);
   router.post("/audio/speech", requireAuth, audioController.speech);
+  router.post("/audio/aligned-speech", requireAuth, audioController.alignedSpeech);
   router.get("/content/bootstrap", requireAuth, contentController.getBootstrap);
   router.post("/conversations/reply", requireAuth, conversationController.reply);
   router.post("/reviews/record", requireAuth, reviewController.record);
@@ -52,6 +53,7 @@ export const buildRouter = (
   router.post("/ai/speaking-coach", requireAuth, aiController.speakingCoach);
   router.post("/ai/analyze-mistake", requireAuth, aiController.analyzeMistake);
   router.post("/practice/complete", requireAuth, practiceController.complete);
+  router.post("/practice/listening-attempts", requireAuth, practiceController.listeningAttempt);
 
   return router;
 };

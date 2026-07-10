@@ -62,6 +62,11 @@ export interface UserProfile {
 export interface UserSettings {
   userId: string;
   languageMode: "pt_explanation_en_correction" | "full_english";
+  supportLanguageMode:
+    | "full_portuguese_support"
+    | "moderate_support"
+    | "guided_immersion"
+    | "english_only";
   preferredAccent: "american" | "british" | "neutral";
   correctionStyle: "gentle" | "direct" | "detailed";
   interfaceLanguage: "pt-BR" | "en";
@@ -128,12 +133,48 @@ export interface ListeningQuestion {
   answer: string;
 }
 
+export interface PhraseMeaningChunk {
+  text: string;
+  meaning: string;
+}
+
+export interface TimedWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface ComprehensiblePhraseDetails {
+  sourceText?: string;
+  audioUrl?: string;
+  naturalTranslation?: string;
+  translation?: string;
+  translatedText?: string;
+  translationPtBr?: string;
+  portugueseText?: string;
+  words?: TimedWord[];
+  chunks?: PhraseMeaningChunk[];
+  context?: string;
+  importantWords?: Array<{
+    text: string;
+    meaning: string;
+  }>;
+  pronunciationTip?: string;
+  additionalExample?: string;
+  slowPrompt?: string;
+}
+
 export interface ListeningLesson {
   id: string;
   title: string;
   level: EnglishLevel;
+  imageUrl?: string;
+  imageSource?: "generated" | "library" | "external";
+  imageAlt?: string;
+  situationDescription?: string;
   dialogue: string[];
   questions: ListeningQuestion[];
+  comprehension?: ComprehensiblePhraseDetails[];
 }
 
 export interface ShadowingItem {
@@ -141,6 +182,16 @@ export interface ShadowingItem {
   phrase: string;
   pronunciationHint: string;
   audioUrl?: string;
+  naturalTranslation?: string;
+  chunks?: PhraseMeaningChunk[];
+  context?: string;
+  importantWords?: Array<{
+    text: string;
+    meaning: string;
+  }>;
+  pronunciationTip?: string;
+  additionalExample?: string;
+  slowPrompt?: string;
 }
 
 export interface ConversationMode {

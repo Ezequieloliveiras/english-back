@@ -276,6 +276,7 @@ Use exemplos naturais como want to -> wanna, going to -> gonna, did you -> didja
 Nunca diga apenas "errado". Sempre ensine.
 Preferencia do usuario:
 - languageMode: ${settings.languageMode}
+- supportLanguageMode: ${settings.supportLanguageMode}
 - preferredAccent: ${settings.preferredAccent}
 - correctionStyle: ${settings.correctionStyle}
 - primaryObjective: ${settings.primaryObjective}
@@ -352,6 +353,7 @@ Retorne JSON valido exatamente neste formato:
             return {
                 userId,
                 languageMode: "pt_explanation_en_correction",
+                supportLanguageMode: "moderate_support",
                 preferredAccent: "american",
                 correctionStyle: "gentle",
                 interfaceLanguage: "pt-BR",

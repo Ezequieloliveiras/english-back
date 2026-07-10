@@ -646,6 +646,7 @@ Return valid JSON exactly in this format:
         languageMode: "pt_explanation_en_correction",
         supportLanguageMode: "moderate_support",
         preferredAccent: "american",
+        preferredVoice: "alloy",
         correctionStyle: "gentle",
         interfaceLanguage: "pt-BR",
         primaryObjective: "conversation",

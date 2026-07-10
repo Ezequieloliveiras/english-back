@@ -21,6 +21,12 @@ const userSettingsSchema = new Schema(
       default: "american",
       enum: ["american", "british", "neutral"],
     },
+    preferredVoice: {
+      type: String,
+      required: true,
+      default: "alloy",
+      enum: ["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar"],
+    },
     correctionStyle: {
       type: String,
       required: true,

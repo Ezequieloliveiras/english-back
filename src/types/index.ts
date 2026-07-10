@@ -68,6 +68,20 @@ export interface UserSettings {
     | "guided_immersion"
     | "english_only";
   preferredAccent: "american" | "british" | "neutral";
+  preferredVoice:
+    | "alloy"
+    | "ash"
+    | "ballad"
+    | "coral"
+    | "echo"
+    | "fable"
+    | "nova"
+    | "onyx"
+    | "sage"
+    | "shimmer"
+    | "verse"
+    | "marin"
+    | "cedar";
   correctionStyle: "gentle" | "direct" | "detailed";
   interfaceLanguage: "pt-BR" | "en";
   primaryObjective: "conversation" | "interview" | "work" | "travel" | "technical_english";

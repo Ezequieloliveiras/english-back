@@ -106,13 +106,6 @@ export class AudioService {
     return {
       providers: [
         {
-          id: "browser",
-          label: "Browser",
-          voices: [],
-          speeds: [0.75, 0.9, 1, 1.15, 1.3],
-          clientSide: true,
-        },
-        {
           id: "openai",
           label: "OpenAI",
           voices: providerVoices.openai,

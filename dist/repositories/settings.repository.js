@@ -13,6 +13,7 @@ const defaultSettings = (userId) => ({
     languageMode: "pt_explanation_en_correction",
     supportLanguageMode: "moderate_support",
     preferredAccent: "american",
+    preferredVoice: "alloy",
     correctionStyle: "gentle",
     interfaceLanguage: "pt-BR",
     primaryObjective: "conversation",
@@ -24,6 +25,7 @@ const mapSettings = (settings) => ({
     languageMode: settings.languageMode,
     supportLanguageMode: settings.supportLanguageMode ?? "moderate_support",
     preferredAccent: settings.preferredAccent,
+    preferredVoice: settings.preferredVoice ?? "alloy",
     correctionStyle: settings.correctionStyle,
     interfaceLanguage: settings.interfaceLanguage,
     primaryObjective: settings.primaryObjective,
@@ -47,6 +49,21 @@ const coerceSettings = (userId, input) => {
         preferredAccent: input.preferredAccent === "british" || input.preferredAccent === "neutral" || input.preferredAccent === "american"
             ? input.preferredAccent
             : base.preferredAccent,
+        preferredVoice: input.preferredVoice === "ash" ||
+            input.preferredVoice === "ballad" ||
+            input.preferredVoice === "coral" ||
+            input.preferredVoice === "echo" ||
+            input.preferredVoice === "fable" ||
+            input.preferredVoice === "nova" ||
+            input.preferredVoice === "onyx" ||
+            input.preferredVoice === "sage" ||
+            input.preferredVoice === "shimmer" ||
+            input.preferredVoice === "verse" ||
+            input.preferredVoice === "marin" ||
+            input.preferredVoice === "cedar" ||
+            input.preferredVoice === "alloy"
+            ? input.preferredVoice
+            : base.preferredVoice,
         correctionStyle: input.correctionStyle === "direct" || input.correctionStyle === "detailed" || input.correctionStyle === "gentle"
             ? input.correctionStyle
             : base.correctionStyle,
@@ -75,9 +92,10 @@ class SettingsRepository {
         return mapSettings(settings);
     }
     async update(userId, input) {
-        const next = coerceSettings(userId, input);
+        const current = await this.findOrCreate(userId);
+        const next = coerceSettings(userId, { ...current, ...input });
         if (!isDatabaseReady()) {
-            const updated = { ...defaultSettings(userId), ...(memorySettings.get(userId) ?? {}), ...next };
+            const updated = { ...defaultSettings(userId), ...current, ...next };
             memorySettings.set(userId, updated);
             return updated;
         }

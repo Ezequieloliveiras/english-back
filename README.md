@@ -63,9 +63,8 @@ As rotas `/api/ai/*` usam a Responses API para gerar respostas de coach de ingle
 
 ## Audio
 
-O Shadowing suporta provedores de voz configuraveis:
+O audio do app usa voz gerada no backend:
 
-- `browser`: voz local do navegador, sem backend de audio.
 - `openai`: usa `OPENAI_API_KEY` e retorna MP3 gerado por OpenAI.
 - `google` ou `custom`: usam `VOICE_PROVIDER_ENDPOINT` e `VOICE_PROVIDER_API_KEY` para integrar um gateway externo.
 

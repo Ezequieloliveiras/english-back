@@ -1,4 +1,14 @@
 import { env } from "../config/env";
+import { AudioCacheRepository } from "../repositories/audioCache.repository";
+import { AudioStorageService } from "./audioStorage.service";
+import {
+  AudioType,
+  addDays,
+  buildAudioCacheKey,
+  createHash,
+  getAudioCachePolicy,
+  normalizeSpeechText,
+} from "../utils/audioCache";
 
 export type SpeechProvider = "openai" | "google" | "custom";
 
@@ -52,6 +62,11 @@ export class AudioProviderError extends Error {
 }
 
 export class AudioService {
+  constructor(
+    private readonly audioCacheRepository?: AudioCacheRepository,
+    private readonly audioStorageService = new AudioStorageService()
+  ) {}
+
   listProviders() {
     return {
       providers: [
@@ -95,40 +110,145 @@ export class AudioService {
     text?: string;
     voice?: string;
     speed?: number;
+    model?: string;
+    language?: string;
+    accent?: string;
+    audioType?: AudioType;
+    cacheable?: boolean;
+    version?: string;
   }) {
     const provider = input.provider as SpeechProvider;
-    const text = input.text?.trim();
+    const text = normalizeSpeechText(input.text ?? "");
+    const speed = clampSpeed(input.speed);
+    const model = input.model || "gpt-4o-mini-tts";
+    const language = input.language || "en";
+    const accent = input.accent || "american";
+    const audioType = input.audioType || "unknown";
+    const version = input.version || "v1";
 
     if (!text) {
       throw new Error("Text is required");
     }
 
-    if (provider === "openai") {
-      return this.createOpenAiSpeech({
-        text,
-        voice: input.voice,
-        speed: clampSpeed(input.speed),
-      });
+    const policy = getAudioCachePolicy(audioType);
+    const shouldCache = Boolean(policy.cacheable && input.cacheable !== false);
+    const voice = this.resolveVoice(provider, input.voice);
+    const cacheKey = buildAudioCacheKey({
+      provider,
+      model,
+      text,
+      voice,
+      speed,
+      accent,
+      language,
+      audioType,
+      version,
+    });
+
+    if (shouldCache && this.audioCacheRepository) {
+      try {
+        const cached = await this.audioCacheRepository.findValidByKey(cacheKey);
+        const cachedBuffer = cached ? await this.audioStorageService.read(cached) : null;
+
+        if (cached && cachedBuffer) {
+          console.info(`AUDIO_CACHE_HIT key=${cacheKey}`);
+          return {
+            contentType: cached.mimeType,
+            buffer: cachedBuffer,
+            cache: "HIT" as const,
+            cacheKey,
+            cacheable: true,
+            expiresAt: cached.expiresAt,
+          };
+        }
+
+        console.info(`AUDIO_CACHE_MISS key=${cacheKey}`);
+      } catch (error) {
+        console.warn(`AUDIO_CACHE_ERROR key=${cacheKey}`, error instanceof Error ? error.message : error);
+      }
+    } else {
+      console.info(`AUDIO_CACHE_BYPASS type=${audioType} key=${cacheKey}`);
     }
 
-    if (provider === "google" || provider === "custom") {
-      return this.createConfiguredProviderSpeech({
-        provider,
-        text,
-        voice: input.voice,
-        speed: clampSpeed(input.speed),
-      });
+    const generated =
+      provider === "openai"
+        ? await this.createOpenAiSpeech({
+            text,
+            voice,
+            speed,
+            model,
+          })
+        : provider === "google" || provider === "custom"
+          ? await this.createConfiguredProviderSpeech({
+              provider,
+              text,
+              voice,
+              speed,
+            })
+          : null;
+
+    if (!generated) {
+      throw new Error("Unsupported speech provider");
     }
 
-    throw new Error("Unsupported speech provider");
+    if (shouldCache && this.audioCacheRepository) {
+      try {
+        const expiresAt = addDays(new Date(), policy.ttlDays);
+        const stored = await this.audioStorageService.storeInMongo(generated.buffer);
+        await this.audioCacheRepository.save({
+          key: cacheKey,
+          provider,
+          model,
+          textHash: createHash(text),
+          textNormalized: text,
+          voice,
+          speed,
+          accent,
+          language,
+          audioType,
+          mimeType: generated.contentType,
+          expiresAt,
+          ...stored,
+        });
+        console.info(`AUDIO_CACHE_SAVE key=${cacheKey}`);
+
+        return {
+          ...generated,
+          cache: "MISS" as const,
+          cacheKey,
+          cacheable: true,
+          expiresAt,
+        };
+      } catch (error) {
+        console.warn(`AUDIO_CACHE_ERROR key=${cacheKey}`, error instanceof Error ? error.message : error);
+      }
+    }
+
+    return {
+      ...generated,
+      cache: shouldCache ? ("MISS" as const) : ("BYPASS" as const),
+      cacheKey,
+      cacheable: false,
+    };
   }
 
-  private async createOpenAiSpeech(input: { text: string; voice?: string; speed: number }) {
+  private resolveVoice(provider: SpeechProvider, voice?: string) {
+    if (provider === "openai") {
+      return providerVoices.openai.includes(voice ?? "") ? voice ?? "alloy" : "alloy";
+    }
+
+    if (provider === "google") {
+      return providerVoices.google.includes(voice ?? "") ? voice ?? providerVoices.google[0] : providerVoices.google[0];
+    }
+
+    return voice || "default";
+  }
+
+  private async createOpenAiSpeech(input: { text: string; voice: string; speed: number; model: string }) {
     if (!env.openAiApiKey) {
       throw new Error("OPENAI_API_KEY is required for OpenAI voice");
     }
 
-    const voice = providerVoices.openai.includes(input.voice ?? "") ? input.voice : "alloy";
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
       headers: {
@@ -136,8 +256,8 @@ export class AudioService {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini-tts",
-        voice,
+        model: input.model,
+        voice: input.voice,
         input: input.text,
         instructions: buildOpenAiSpeechInstructions(input.speed),
         response_format: "mp3",

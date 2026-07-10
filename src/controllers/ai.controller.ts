@@ -10,7 +10,7 @@ const sendSafeError = (response: Response, status: number, message: string) => {
 
 const sendAiError = (response: Response, error: unknown, fallbackMessage: string) => {
   if (error instanceof AiProviderError) {
-    sendSafeError(response, error.statusCode, error.message);
+    response.status(error.statusCode).json({ message: error.message, status: error.code });
     return;
   }
 
@@ -112,23 +112,23 @@ export class AiController {
   speakingCoach = async (request: AuthenticatedRequest, response: Response) => {
     try {
       if (!request.auth?.userId) return sendSafeError(response, 401, "Authentication required");
-      const { audioBase64, targetPhrase, focus, context, level, audioMimeType } = request.body;
-
-      if (!audioBase64?.trim()) {
-        sendSafeError(response, 400, "audioBase64 is required");
-        return;
-      }
+      const { targetPhrase, focus, context, level } = request.body;
 
       if (!targetPhrase?.trim()) {
         sendSafeError(response, 400, "targetPhrase is required");
         return;
       }
 
+      if (!request.file?.buffer?.length) {
+        sendSafeError(response, 400, "audio file is required");
+        return;
+      }
+
       const result = await this.openAiService.analyzeSpeakingCoachAttempt({
         userId: request.auth.userId,
-        audioBase64,
-        audioMimeType,
-        targetPhrase,
+        audioBuffer: request.file.buffer,
+        audioMimeType: request.file.mimetype,
+        targetPhrase: targetPhrase.trim(),
         focus,
         context,
         level,

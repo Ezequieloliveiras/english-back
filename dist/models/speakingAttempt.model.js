@@ -19,6 +19,14 @@ const speakingAttemptSchema = new mongoose_1.Schema({
     correctedWords: { type: [String], required: true, default: [] },
     feedback: { type: mongoose_1.Schema.Types.Mixed, required: true, default: {} },
     suggestion: { type: String },
+    durationSeconds: { type: Number },
+    speechRatio: { type: Number },
+    transcriptCoverage: { type: Number },
+    transcriptSimilarity: { type: Number },
+    analysisProvider: { type: String },
+    analysisModel: { type: String },
+    audioMimeType: { type: String },
+    status: { type: String, default: "ok" },
 }, { timestamps: true });
 speakingAttemptSchema.index({ userId: 1, createdAt: -1 });
 exports.SpeakingAttemptModel = (0, mongoose_1.model)("SpeakingAttempt", speakingAttemptSchema);

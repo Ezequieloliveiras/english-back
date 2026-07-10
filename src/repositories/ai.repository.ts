@@ -44,6 +44,14 @@ interface SaveSpeakingAttemptInput {
   correctedWords: string[];
   feedback: unknown;
   suggestion?: string;
+  durationSeconds?: number;
+  speechRatio?: number;
+  transcriptCoverage?: number;
+  transcriptSimilarity?: number;
+  analysisProvider?: string;
+  analysisModel?: string;
+  audioMimeType?: string;
+  status?: string;
 }
 
 export interface UserProgressStats {

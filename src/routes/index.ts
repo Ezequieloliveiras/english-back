@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { RequestHandler, Router } from "express";
+import multer from "multer";
 import { AiController } from "../controllers/ai.controller";
 import { AudioController } from "../controllers/audio.controller";
 import { AuthController } from "../controllers/auth.controller";
@@ -10,6 +11,38 @@ import { PracticeController } from "../controllers/practice.controller";
 import { ReviewController } from "../controllers/review.controller";
 import { SettingsController } from "../controllers/settings.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
+import { isSupportedSpeakingAudioMime } from "../services/speakingCoachAnalysis.service";
+
+const speakingCoachUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_request, file, callback) => {
+    if (!isSupportedSpeakingAudioMime(file.mimetype)) {
+      callback(new Error("Unsupported audio format"));
+      return;
+    }
+
+    callback(null, true);
+  },
+}).single("audio");
+
+const handleSpeakingCoachUpload: RequestHandler = (request, response, next) => {
+  speakingCoachUpload(request, response, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      response.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
+        message: error.code === "LIMIT_FILE_SIZE" ? "Audio file is too large." : error.message,
+      });
+      return;
+    }
+
+    response.status(415).json({ message: error instanceof Error ? error.message : "Unsupported audio upload" });
+  });
+};
 
 export const buildRouter = (
   contentController: ContentController,
@@ -50,7 +83,7 @@ export const buildRouter = (
   router.post("/ai/think-in-english", requireAuth, aiController.thinkInEnglish);
   router.post("/ai/vocabulary", requireAuth, aiController.vocabulary);
   router.post("/ai/daily-plan", requireAuth, aiController.dailyPlan);
-  router.post("/ai/speaking-coach", requireAuth, aiController.speakingCoach);
+  router.post("/ai/speaking-coach", requireAuth, handleSpeakingCoachUpload, aiController.speakingCoach);
   router.post("/ai/analyze-mistake", requireAuth, aiController.analyzeMistake);
   router.post("/practice/complete", requireAuth, practiceController.complete);
   router.post("/practice/listening-attempts", requireAuth, practiceController.listeningAttempt);

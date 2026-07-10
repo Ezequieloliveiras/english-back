@@ -18,6 +18,14 @@ const speakingAttemptSchema = new Schema(
     correctedWords: { type: [String], required: true, default: [] },
     feedback: { type: Schema.Types.Mixed, required: true, default: {} },
     suggestion: { type: String },
+    durationSeconds: { type: Number },
+    speechRatio: { type: Number },
+    transcriptCoverage: { type: Number },
+    transcriptSimilarity: { type: Number },
+    analysisProvider: { type: String },
+    analysisModel: { type: String },
+    audioMimeType: { type: String },
+    status: { type: String, default: "ok" },
   },
   { timestamps: true }
 );

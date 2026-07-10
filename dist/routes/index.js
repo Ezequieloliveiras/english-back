@@ -1,8 +1,39 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildRouter = void 0;
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const auth_middleware_1 = require("../middlewares/auth.middleware");
+const speakingCoachAnalysis_service_1 = require("../services/speakingCoachAnalysis.service");
+const speakingCoachUpload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    fileFilter: (_request, file, callback) => {
+        if (!(0, speakingCoachAnalysis_service_1.isSupportedSpeakingAudioMime)(file.mimetype)) {
+            callback(new Error("Unsupported audio format"));
+            return;
+        }
+        callback(null, true);
+    },
+}).single("audio");
+const handleSpeakingCoachUpload = (request, response, next) => {
+    speakingCoachUpload(request, response, (error) => {
+        if (!error) {
+            next();
+            return;
+        }
+        if (error instanceof multer_1.default.MulterError) {
+            response.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
+                message: error.code === "LIMIT_FILE_SIZE" ? "Audio file is too large." : error.message,
+            });
+            return;
+        }
+        response.status(415).json({ message: error instanceof Error ? error.message : "Unsupported audio upload" });
+    });
+};
 const buildRouter = (contentController, audioController, authController, conversationController, reviewController, onboardingController, dailyPlanController, aiController, practiceController, settingsController) => {
     const router = (0, express_1.Router)();
     router.get("/health", (_request, response) => {
@@ -28,7 +59,7 @@ const buildRouter = (contentController, audioController, authController, convers
     router.post("/ai/think-in-english", auth_middleware_1.requireAuth, aiController.thinkInEnglish);
     router.post("/ai/vocabulary", auth_middleware_1.requireAuth, aiController.vocabulary);
     router.post("/ai/daily-plan", auth_middleware_1.requireAuth, aiController.dailyPlan);
-    router.post("/ai/speaking-coach", auth_middleware_1.requireAuth, aiController.speakingCoach);
+    router.post("/ai/speaking-coach", auth_middleware_1.requireAuth, handleSpeakingCoachUpload, aiController.speakingCoach);
     router.post("/ai/analyze-mistake", auth_middleware_1.requireAuth, aiController.analyzeMistake);
     router.post("/practice/complete", auth_middleware_1.requireAuth, practiceController.complete);
     router.post("/practice/listening-attempts", auth_middleware_1.requireAuth, practiceController.listeningAttempt);

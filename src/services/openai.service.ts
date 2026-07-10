@@ -2,6 +2,15 @@ import OpenAI, { toFile } from "openai";
 import { env } from "../config/env";
 import { AiRepository } from "../repositories/ai.repository";
 import { SettingsRepository, UserSettings } from "../repositories/settings.repository";
+import {
+  SpeakingCoachStatus,
+  SpeakingCoachValidationError,
+  comparePhraseToTranscript,
+  deriveSpeakingMetrics,
+  normalizeAndAnalyzeAudio,
+  speakingAudioExtension,
+  validateTranscriptComparison,
+} from "./speakingCoachAnalysis.service";
 
 type AiMode =
   | "conversation"
@@ -49,8 +58,8 @@ interface MistakeInput {
 
 interface SpeakingCoachInput {
   userId: string;
-  audioBase64: string;
-  audioMimeType?: string;
+  audioBuffer: Buffer;
+  audioMimeType: string;
   targetPhrase: string;
   focus?: string;
   context?: string;
@@ -65,6 +74,20 @@ interface MistakeAnalysis {
 }
 
 interface SpeakingCoachAnalysis {
+  status: SpeakingCoachStatus;
+  detectedSpeech: boolean;
+  transcript?: string;
+  audioQuality?: {
+    durationSeconds: number;
+    speechRatio: number;
+    volumeLevel?: number;
+  };
+  comparison?: {
+    coverage: number;
+    similarity: number;
+    missingWords: string[];
+    extraWords: string[];
+  };
   overallScore: number;
   metrics: Array<{
     label: string;
@@ -87,7 +110,7 @@ interface SpeakingCoachAnalysis {
     evidence: string;
     exercise: string;
   }>;
-  mode: "ai" | "preview";
+  mode: "ai";
 }
 
 export interface AiReply {
@@ -101,7 +124,8 @@ export interface AiReply {
 export class AiProviderError extends Error {
   constructor(
     message: string,
-    readonly statusCode = 503
+    readonly statusCode = 503,
+    readonly code?: string
   ) {
     super(message);
   }
@@ -141,92 +165,6 @@ const parseJson = <T>(text: string): T => {
 
 const limitMessages = (messages: PreviousMessage[] = []) => messages.slice(-8);
 
-const buildPreviewSpeakingCoachAnalysis = (input: Pick<SpeakingCoachInput, "targetPhrase">): SpeakingCoachAnalysis => ({
-  overallScore: 72,
-  mode: "preview",
-  metrics: [
-    { label: "Pronunciation Score", value: 74 },
-    { label: "Naturalness", value: 66 },
-    { label: "Connected Speech", value: 62 },
-    { label: "Stress", value: 70 },
-    { label: "Intonation", value: 68 },
-    { label: "Rhythm", value: 65 },
-    { label: "Fluency", value: 76 },
-  ],
-  feedback: [
-    {
-      title: "Voce pode estar pronunciando palavra por palavra.",
-      whatHappened:
-        "A gravacao foi recebida, mas a analise acustica real ainda depende da OpenAI configurada no backend.",
-      whyItHappens:
-        "Brasileiros geralmente aprendem ingles lendo, entao tendem a separar palavras que nativos conectam em blocos.",
-      whenToUse:
-        "Use connected speech em conversas naturais, respostas rapidas e reunioes informais.",
-      whenToAvoid:
-        "Evite reduzir demais em entrevistas formais, apresentacoes ou quando precisar falar muito claramente.",
-      drill: "Treine a frase em blocos curtos antes de falar tudo: I wanna / talk about / my routine.",
-    },
-  ],
-  strengths: ["Voce completou o ciclo de escutar, gravar e revisar.", "A frase alvo foi praticada em voz alta."],
-  improvements: ["Conectar palavras em blocos.", "Dar mais peso nas palavras principais.", "Evitar ritmo silabico demais."],
-  nextMission: "Repetir a frase com connected speech e stress em palavras de conteudo.",
-  nextPhrase: input.targetPhrase.includes("going")
-    ? "Did you kind of finish it already?"
-    : "I am going to check it after lunch.",
-  patterns: [
-    {
-      title: "Connected speech",
-      evidence: "Treinar reducoes como want to -> wanna e going to -> gonna.",
-      exercise: "Alternar versao clara e natural: want to / wanna.",
-    },
-    {
-      title: "Stress uniforme",
-      evidence: "A tendencia esperada e colocar energia parecida em todas as palavras.",
-      exercise: "Escolher 2 palavras fortes por frase e reduzir o resto.",
-    },
-  ],
-});
-
-const translateKnownSpeakingCoachText = (value: string) => {
-  const normalized = value.trim();
-  const dictionary: Record<string, string> = {
-    "Using 'want to' vs 'wanna'": "Usando 'want to' e 'wanna'",
-    "Using ‘want to’ vs ‘wanna’": "Usando 'want to' e 'wanna'",
-    "You said 'want to' clearly, which is correct but sounds more formal.":
-      "Você disse 'want to' de forma clara; isso está correto, mas soa mais formal.",
-    "'Want to' is two words and people often link them quickly in speech to sound more natural.":
-      "'Want to' tem duas palavras, e as pessoas costumam conectar esses sons rapidamente para soar mais natural.",
-    "Use 'wanna' in informal speaking, like with friends or casual talks.":
-      "Use 'wanna' em fala informal, como em conversas com amigos ou bate-papos casuais.",
-    "Avoid 'wanna' in formal writing or professional talks.":
-      "Evite 'wanna' em escrita formal ou em conversas profissionais mais cuidadosas.",
-    "Practice saying 'I wanna talk about my routine.' slowly, then faster, to get natural.":
-      "Pratique dizendo 'I wanna talk about my routine.' devagar primeiro; depois acelere para soar natural.",
-  };
-
-  return dictionary[normalized] ?? value;
-};
-
-const ensurePortugueseSpeakingCoachAnalysis = (analysis: SpeakingCoachAnalysis): SpeakingCoachAnalysis => ({
-  ...analysis,
-  feedback: analysis.feedback.map((item) => ({
-    title: translateKnownSpeakingCoachText(item.title),
-    whatHappened: translateKnownSpeakingCoachText(item.whatHappened),
-    whyItHappens: translateKnownSpeakingCoachText(item.whyItHappens),
-    whenToUse: translateKnownSpeakingCoachText(item.whenToUse),
-    whenToAvoid: translateKnownSpeakingCoachText(item.whenToAvoid),
-    drill: translateKnownSpeakingCoachText(item.drill),
-  })),
-  strengths: analysis.strengths.map(translateKnownSpeakingCoachText),
-  improvements: analysis.improvements.map(translateKnownSpeakingCoachText),
-  nextMission: translateKnownSpeakingCoachText(analysis.nextMission),
-  patterns: analysis.patterns.map((item) => ({
-    title: translateKnownSpeakingCoachText(item.title),
-    evidence: translateKnownSpeakingCoachText(item.evidence),
-    exercise: translateKnownSpeakingCoachText(item.exercise),
-  })),
-});
-
 const normalizeWords = (text: string) =>
   text
     .toLowerCase()
@@ -236,19 +174,43 @@ const normalizeWords = (text: string) =>
 
 const countWords = (text: string) => normalizeWords(text).length;
 
-const findDifferentWords = (expectedText: string, transcribedText: string) => {
-  const expected = new Set(normalizeWords(expectedText));
-
-  return normalizeWords(transcribedText)
-    .filter((word) => !expected.has(word))
-    .slice(0, 12);
-};
-
 const metricsToMap = (metrics: SpeakingCoachAnalysis["metrics"]) =>
   metrics.reduce<Record<string, number>>((acc, metric) => {
     acc[metric.label] = metric.value;
     return acc;
   }, {});
+
+const englishPedagogyPattern =
+  /\b(you said|you pronounced|you missed|you used|you added|your pronunciation|your rhythm|your recording|good rhythm|clear pronunciation|connected speech|add the|missing word|instead of|people often|it sounds|sounds more|improve intonation|practice saying|try saying)\b/i;
+
+const hasEnglishPedagogyWhenPortugueseNeeded = (
+  settings: UserSettings,
+  feedback: Pick<
+    SpeakingCoachAnalysis,
+    "feedback" | "strengths" | "improvements" | "nextMission" | "nextPhrase" | "patterns"
+  >
+) => {
+  if (settings.languageMode === "full_english") {
+    return false;
+  }
+
+  const texts = [
+    ...(feedback.feedback ?? []).flatMap((item) => [
+      item.title,
+      item.whatHappened,
+      item.whyItHappens,
+      item.whenToUse,
+      item.whenToAvoid,
+      item.drill,
+    ]),
+    ...(feedback.strengths ?? []),
+    ...(feedback.improvements ?? []),
+    feedback.nextMission,
+    ...(feedback.patterns ?? []).flatMap((item) => [item.evidence, item.exercise]),
+  ].filter((text): text is string => typeof text === "string");
+
+  return texts.some((text) => englishPedagogyPattern.test(text.replace(/"[^"]+"/g, "")));
+};
 
 export class OpenAiService {
   private readonly client: OpenAI | null;
@@ -276,12 +238,13 @@ export class OpenAiService {
     }
 
     try {
+      const systemContent = mode === "speaking-coach" ? instructions : `${basePrompt}\n${instructions}`;
       const response = await this.client.responses.create({
         model: "gpt-4.1-mini",
         input: [
           {
             role: "system",
-            content: `${basePrompt}\n${instructions}`,
+            content: systemContent,
           },
           {
             role: "user",
@@ -293,6 +256,10 @@ export class OpenAiService {
       return parseJson<T>(response.output_text);
     } catch (error) {
       console.error(`[ai:${mode}] OpenAI request failed`, error instanceof Error ? error.message : error);
+
+      if (error instanceof SyntaxError) {
+        throw new AiProviderError("OpenAI returned an invalid structured response.", 502);
+      }
 
       const status = typeof error === "object" && error && "status" in error ? Number(error.status) : undefined;
 
@@ -313,6 +280,64 @@ export class OpenAiService {
 
       throw new AiProviderError("OpenAI is unavailable right now. Please try again.", 503);
     }
+  }
+
+  private async ensureSpeakingCoachFeedbackLanguage({
+    settings,
+    feedback,
+  }: {
+    settings: UserSettings;
+    feedback: Pick<
+      SpeakingCoachAnalysis,
+      "feedback" | "strengths" | "improvements" | "nextMission" | "nextPhrase" | "patterns"
+    >;
+  }) {
+    if (!hasEnglishPedagogyWhenPortugueseNeeded(settings, feedback)) {
+      return feedback;
+    }
+
+    const repairedFeedback = await this.createJsonResponse<
+      Pick<
+        SpeakingCoachAnalysis,
+        "feedback" | "strengths" | "improvements" | "nextMission" | "nextPhrase" | "patterns"
+      >
+    >({
+      mode: "speaking-coach",
+      instructions: `
+You will receive a JSON object with pronunciation feedback.
+Rewrite the pedagogical fields in clear Brazilian Portuguese, like a private teacher explaining to a Brazilian learner.
+Preserve English phrases, examples and corrections verbatim when they are quoted or are training phrases.
+Do not change nextPhrase if it is in English.
+Do not change the meaning, do not add scores, do not invent evidence and do not remove items.
+Fields that must be in Brazilian Portuguese: title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence and patterns.exercise.
+Fields that may stay in English: quoted words/phrases, examples like "want to", "wanna" and nextPhrase.
+Return valid JSON exactly in this format:
+{
+  "feedback": [
+    {
+      "title":"short feedback",
+      "whatHappened":"short explanation",
+      "whyItHappens":"short explanation",
+      "whenToUse":"when to use it",
+      "whenToAvoid":"when to avoid it",
+      "drill":"practical drill"
+    }
+  ],
+  "strengths":["strength"],
+  "improvements":["improvement point"],
+  "nextMission":"next mission",
+  "nextPhrase":"another similar sentence to practice",
+  "patterns":[{"title":"pattern","evidence":"evidence","exercise":"exercise"}]
+}
+`,
+      userContent: JSON.stringify(feedback),
+    });
+
+    if (hasEnglishPedagogyWhenPortugueseNeeded(settings, repairedFeedback)) {
+      throw new AiProviderError("OpenAI returned feedback in the wrong language. Please try again.", 502);
+    }
+
+    return repairedFeedback;
   }
 
   async generateConversationReply(input: ConversationInput): Promise<AiReply> {
@@ -403,89 +428,132 @@ Use os minutos disponiveis sem ultrapassar o total.
     const settings = await this.getUserSettings(input.userId);
 
     if (!this.client) {
-      return buildPreviewSpeakingCoachAnalysis(input);
+      throw new AiProviderError("OpenAI is not configured on the backend.", 503);
     }
 
     try {
-      const audioBuffer = Buffer.from(input.audioBase64, "base64");
-      const audioFile = await toFile(audioBuffer, "speaking-coach.webm", {
-        type: input.audioMimeType ?? "audio/webm",
+      const { wavBuffer, audioQuality } = await normalizeAndAnalyzeAudio({
+        buffer: input.audioBuffer,
+        mimeType: input.audioMimeType,
+      });
+      const audioFile = await toFile(wavBuffer, `speaking-coach.${speakingAudioExtension("audio/wav")}`, {
+        type: "audio/wav",
       });
       const transcription = await this.client.audio.transcriptions.create({
         file: audioFile,
         model: "gpt-4o-mini-transcribe",
         language: "en",
-        prompt: `Target phrase: ${input.targetPhrase}`,
+      });
+      const transcript = transcription.text ?? "";
+      const comparison = comparePhraseToTranscript(input.targetPhrase, transcript);
+      validateTranscriptComparison(transcript, audioQuality, comparison);
+      const derived = deriveSpeakingMetrics(audioQuality, comparison);
+
+      console.info("[ai:speaking-coach] validated", {
+        durationSeconds: audioQuality.durationSeconds,
+        speechRatio: audioQuality.speechRatio,
+        words: comparison.spokenWords.length,
+        coverage: comparison.coverage,
+        status: "ok",
       });
 
-      const result = await this.createJsonResponse<SpeakingCoachAnalysis>({
+      const feedbackResult = await this.createJsonResponse<
+        Pick<SpeakingCoachAnalysis, "feedback" | "strengths" | "improvements" | "nextMission" | "nextPhrase" | "patterns">
+      >({
         mode: "speaking-coach",
         instructions: `
-Voce e um professor particular de pronuncia para brasileiros aprendendo ingles.
-Analise a tentativa do aluno comparando a transcricao com a frase alvo, mas nunca entregue apenas transcricao.
-Ensine como um professor experiente: explique o que aconteceu, por que acontece, quando usar e quando evitar.
-Foque em pronuncia, ritmo, stress, intonacao, connected speech, naturalidade e fluencia.
-Use exemplos naturais como want to -> wanna, going to -> gonna, did you -> didja, kind of -> kinda, out of -> outta, I don't know -> I dunno quando forem relevantes.
-Nunca diga apenas "errado". Sempre ensine.
-Preferencia do usuario:
+You are a private English pronunciation teacher for Brazilian learners.
+Use ONLY the real evidence provided. Do not invent acoustic data.
+The scores were already calculated deterministically. Do not return scores.
+Teach like an experienced coach: explain what happened, why it happens, when to use it and when to avoid it.
+Focus on what is supported by the transcript, target coverage, missing/extra words, duration, volume and speech ratio.
+Use natural examples such as want to -> wanna, going to -> gonna, did you -> didja, kind of -> kinda, out of -> outta, I don't know -> I dunno when relevant.
+Never just say "wrong". Always teach.
+User preferences:
 - languageMode: ${settings.languageMode}
 - supportLanguageMode: ${settings.supportLanguageMode}
 - preferredAccent: ${settings.preferredAccent}
 - correctionStyle: ${settings.correctionStyle}
 - primaryObjective: ${settings.primaryObjective}
-Se languageMode for "pt_explanation_en_correction", escreva explicacoes pedagogicas em portugues brasileiro claro, mas mantenha correction, naturalSuggestion, frases de fala e exemplos em ingles.
-Se languageMode for "full_english", escreva tudo em ingles simples, nivel A1/A2.
-IMPORTANTE: Para usuarios brasileiros, todos os campos pedagogicos abaixo devem estar em portugues brasileiro:
-title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence e patterns.exercise.
-Mantenha em ingles apenas as frases citadas literalmente, como "want to", "wanna" e "I wanna talk about my routine.".
-Exemplo de tom esperado: "Você disse 'want to' de forma clara; isso está correto, mas soa mais formal."
-Retorne JSON valido exatamente neste formato:
+If languageMode is "pt_explanation_en_correction": write pedagogical explanations in clear Brazilian Portuguese, but keep corrections, spoken phrases and examples in English.
+If languageMode is "full_english": write everything in simple A1/A2 English, including titles, subtitles, explanations, strengths, improvements, nextMission and patterns.
+For Brazilian Portuguese mode, these pedagogical fields must be in Brazilian Portuguese:
+title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence and patterns.exercise.
+Keep only literal quoted English phrases in English, such as "want to", "wanna" and "I wanna talk about my routine.".
+In Brazilian Portuguese mode, do not write phrases like "You said", "Good rhythm", "Practice..." outside quoted examples; write them in Portuguese, like "Você disse...", "Bom ritmo...", "Pratique...".
+Return valid JSON exactly in this format:
 {
-  "overallScore": 0,
-  "metrics": [
-    {"label":"Pronunciation Score","value":0},
-    {"label":"Naturalness","value":0},
-    {"label":"Connected Speech","value":0},
-    {"label":"Stress","value":0},
-    {"label":"Intonation","value":0},
-    {"label":"Rhythm","value":0},
-    {"label":"Fluency","value":0}
-  ],
   "feedback": [
     {
-      "title":"feedback curto",
-      "whatHappened":"explicacao curta",
-      "whyItHappens":"explicacao curta",
-      "whenToUse":"quando usar",
-      "whenToAvoid":"quando evitar",
-      "drill":"exercicio pratico"
+      "title":"short feedback",
+      "whatHappened":"short explanation",
+      "whyItHappens":"short explanation",
+      "whenToUse":"when to use it",
+      "whenToAvoid":"when to avoid it",
+      "drill":"practical drill"
     }
   ],
-  "strengths":["ponto forte"],
-  "improvements":["ponto para melhorar"],
-  "nextMission":"proxima missao",
-  "nextPhrase":"outra frase semelhante para praticar",
-  "patterns":[{"title":"padrao","evidence":"evidencia","exercise":"exercicio"}],
-  "mode":"ai"
+  "strengths":["strength"],
+  "improvements":["improvement point"],
+  "nextMission":"next mission",
+  "nextPhrase":"another similar sentence to practice",
+  "patterns":[{"title":"pattern","evidence":"evidence","exercise":"exercise"}]
 }
 `,
         userContent: JSON.stringify({
           targetPhrase: input.targetPhrase,
-          transcriptFromAudio: transcription.text,
+          transcriptFromAudio: transcript,
+          audioQuality,
+          comparison: {
+            coverage: comparison.coverage,
+            similarity: comparison.similarity,
+            wordErrorRate: comparison.wordErrorRate,
+            missingWords: comparison.missingWords,
+            extraWords: comparison.extraWords,
+          },
+          deterministicScores: derived,
           focus: input.focus,
           context: input.context,
           level: input.level ?? "A1",
         }),
       });
+      const localizedFeedbackResult = await this.ensureSpeakingCoachFeedbackLanguage({
+        settings,
+        feedback: feedbackResult,
+      });
 
-      const localizedResult =
-        settings.languageMode === "full_english" ? result : ensurePortugueseSpeakingCoachAnalysis(result);
+      const result: SpeakingCoachAnalysis = {
+        status: "ok",
+        detectedSpeech: true,
+        transcript,
+        audioQuality: {
+          durationSeconds: audioQuality.durationSeconds,
+          speechRatio: audioQuality.speechRatio,
+          volumeLevel: audioQuality.rms,
+        },
+        comparison: {
+          coverage: comparison.coverage,
+          similarity: comparison.similarity,
+          missingWords: comparison.missingWords,
+          extraWords: comparison.extraWords,
+        },
+        overallScore: derived.overallScore,
+        metrics: derived.metrics,
+        feedback: localizedFeedbackResult.feedback ?? [],
+        strengths: localizedFeedbackResult.strengths ?? [],
+        improvements: localizedFeedbackResult.improvements ?? [],
+        nextMission: localizedFeedbackResult.nextMission ?? "Repita a frase mantendo clareza e ritmo natural.",
+        nextPhrase: localizedFeedbackResult.nextPhrase ?? input.targetPhrase,
+        patterns: localizedFeedbackResult.patterns ?? [],
+        mode: "ai",
+      };
+      const localizedResult = result;
       const metrics = metricsToMap(localizedResult.metrics);
-      const correctedWords = findDifferentWords(input.targetPhrase, transcription.text);
+      const correctedWords = comparison.missingWords.slice(0, 12);
       await this.aiRepository.saveSpeakingAttempt({
         userId: input.userId,
         expectedText: input.targetPhrase,
-        transcribedText: transcription.text,
+        transcribedText: transcript,
         pronunciationScore: metrics["Pronunciation Score"] ?? localizedResult.overallScore,
         naturalnessScore: metrics.Naturalness ?? localizedResult.overallScore,
         connectedSpeechScore: metrics["Connected Speech"] ?? localizedResult.overallScore,
@@ -493,10 +561,18 @@ Retorne JSON valido exatamente neste formato:
         intonationScore: metrics.Intonation ?? localizedResult.overallScore,
         rhythmScore: metrics.Rhythm ?? localizedResult.overallScore,
         fluencyScore: metrics.Fluency ?? localizedResult.overallScore,
-        wordsSpokenCount: countWords(transcription.text),
+        wordsSpokenCount: countWords(transcript),
         correctedWords,
         feedback: localizedResult.feedback,
         suggestion: localizedResult.nextPhrase,
+        durationSeconds: audioQuality.durationSeconds,
+        speechRatio: audioQuality.speechRatio,
+        transcriptCoverage: comparison.coverage,
+        transcriptSimilarity: comparison.similarity,
+        analysisProvider: "openai",
+        analysisModel: "gpt-4o-mini-transcribe+deterministic",
+        audioMimeType: input.audioMimeType,
+        status: "ok",
       });
 
       return {
@@ -505,7 +581,20 @@ Retorne JSON valido exatamente neste formato:
       };
     } catch (error) {
       console.error("[ai:speaking-coach] analysis failed", error instanceof Error ? error.message : error);
-      return buildPreviewSpeakingCoachAnalysis(input);
+      if (error instanceof SpeakingCoachValidationError) {
+        throw new AiProviderError(error.message, error.statusCode, error.status);
+      }
+      const status = typeof error === "object" && error && "status" in error ? Number(error.status) : undefined;
+      if (status === 401) {
+        throw new AiProviderError("OpenAI API key is invalid. Update OPENAI_API_KEY and restart the backend.", 401);
+      }
+      if (status === 429) {
+        throw new AiProviderError("OpenAI quota or billing limit was reached. Add API billing/credits to continue.", 429);
+      }
+      if (error instanceof Error && error.name === "APIConnectionTimeoutError") {
+        throw new AiProviderError("OpenAI took too long to respond. Please try again.", 504);
+      }
+      throw error;
     }
   }
 

@@ -85,6 +85,9 @@ const metricsToMap = (metrics) => metrics.reduce((acc, metric) => {
     acc[metric.label] = metric.value;
     return acc;
 }, {});
+const languageInstruction = (settings) => settings.languageMode === "full_english"
+    ? "The user selected full English. Return all explanations, corrections, suggestions, titles and labels in English only."
+    : "The user selected Portuguese support. Explain pedagogy in Brazilian Portuguese when helpful, but keep English corrections, example phrases and natural suggestions in English.";
 const englishPedagogyPattern = /\b(you said|you pronounced|you missed|you used|you added|your pronunciation|your rhythm|your recording|good rhythm|clear pronunciation|connected speech|add the|missing word|instead of|people often|it sounds|sounds more|improve intonation|practice saying|try saying)\b/i;
 const hasEnglishPedagogyWhenPortugueseNeeded = (settings, feedback) => {
     if (settings.languageMode === "full_english") {
@@ -194,11 +197,13 @@ Return valid JSON exactly in this format:
         return repairedFeedback;
     }
     async generateConversationReply(input) {
+        const settings = await this.getUserSettings(input.userId);
         const reply = await this.createJsonResponse({
             mode: "conversation",
             instructions: `
-Retorne no formato:
-{"reply":"resposta curta","correction":"correcao curta se necessario","suggestedPhrase":"frase melhor","nextQuestion":"proxima pergunta curta","level":"A1"}
+${languageInstruction(settings)}
+Return this JSON shape:
+{"reply":"short answer","correction":"short correction if needed","suggestedPhrase":"better phrase","nextQuestion":"short next question","level":"A1"}
 Modo escolhido: ${input.mode}
 Nivel: ${input.level ?? "A1"}
 Objetivo: ${input.goal ?? "comunicacao real"}
@@ -212,12 +217,14 @@ Objetivo: ${input.goal ?? "comunicacao real"}
         return reply;
     }
     async generateDeveloperEnglishReply(input) {
+        const settings = await this.getUserSettings(input.userId);
         const reply = await this.createJsonResponse({
             mode: "dev-mode",
             instructions: `
 ${developerContexts}
-Retorne no formato:
-{"reply":"resposta curta","correction":"correcao curta se necessario","suggestedPhrase":"frase tecnica melhor","nextQuestion":"proxima pergunta tecnica curta","level":"A1"}
+${languageInstruction(settings)}
+Return this JSON shape:
+{"reply":"short answer","correction":"short correction if needed","suggestedPhrase":"better technical phrase","nextQuestion":"short technical next question","level":"A1"}
 Modo tecnico: ${input.mode}
 Nivel: ${input.level ?? "A1"}
 Objetivo: ${input.goal ?? "ingles tecnico para trabalho"}
@@ -231,12 +238,14 @@ Objetivo: ${input.goal ?? "ingles tecnico para trabalho"}
         return reply;
     }
     async generateThinkInEnglishReply(input) {
+        const settings = await this.getUserSettings(input.userId);
         const reply = await this.createJsonResponse({
             mode: "think-in-english",
             instructions: `
+${languageInstruction(settings)}
 Se o usuario pedir traducao palavra por palavra, incentive descricao em ingles primeiro.
-Retorne no formato:
-{"reply":"resposta curta em ingles simples","correction":"","suggestedPhrase":"frase util","nextQuestion":"pergunta curta","level":"A1"}
+Return this JSON shape:
+{"reply":"short answer in simple English","correction":"","suggestedPhrase":"useful phrase","nextQuestion":"short question","level":"A1"}
 `,
             userContent: JSON.stringify({
                 recentHistory: limitMessages(input.previousMessages),
@@ -247,12 +256,14 @@ Retorne no formato:
         return reply;
     }
     async generateVocabularyExamples(input) {
+        const settings = await this.getUserSettings(input.userId);
         return this.createJsonResponse({
             mode: "vocabulary",
             instructions: `
+${languageInstruction(settings)}
 Crie vocabulario sempre com frases completas, nunca palavras isoladas.
-Retorne:
-{"topic":"tema","level":"A1","examples":[{"phrase":"frase em ingles","translation":"traducao curta","category":"categoria"}]}
+Return this JSON shape:
+{"topic":"topic","level":"A1","examples":[{"phrase":"English phrase","translation":"short translation when Portuguese support is enabled, otherwise English meaning","category":"category"}]}
 `,
             userContent: JSON.stringify(input),
         });
@@ -473,12 +484,14 @@ Return valid JSON exactly in this format:
         return this.settingsRepository.findOrCreate(userId);
     }
     async analyzeStudentMistake(input) {
+        const settings = await this.getUserSettings(input.userId);
         const result = await this.createJsonResponse({
             mode: "mistake",
             instructions: `
+${languageInstruction(settings)}
 Analise apenas erros importantes para comunicacao.
-Retorne:
-{"originalSentence":"frase original","correctedSentence":"frase corrigida","mistakeType":"tipo do erro","explanation":"explicacao curta em portugues"}
+Return this JSON shape:
+{"originalSentence":"original sentence","correctedSentence":"corrected sentence","mistakeType":"mistake type","explanation":"short explanation in the user's selected language"}
 `,
             userContent: JSON.stringify(input),
         });

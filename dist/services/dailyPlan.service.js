@@ -94,7 +94,8 @@ const distributeMinutes = (totalMinutes, weights) => {
     const blockTypes = Object.keys(weights);
     const safeTotal = Math.max(10, Math.min(120, Math.round(totalMinutes)));
     const normalizedTotal = blockTypes.reduce((sum, type) => sum + Math.max(0.04, weights[type]), 0);
-    const minimum = safeTotal < 20 ? 3 : 4;
+    const preferredMinimum = safeTotal < 20 ? 3 : 4;
+    const minimum = Math.max(1, Math.min(preferredMinimum, Math.floor(safeTotal / blockTypes.length)));
     let allocations = blockTypes.map((type) => ({
         type,
         minutes: Math.max(minimum, Math.round((Math.max(0.04, weights[type]) / normalizedTotal) * safeTotal)),

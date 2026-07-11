@@ -1,12 +1,22 @@
 import { ContentRepository } from "../repositories/content.repository";
+import { DailyPlanService } from "./dailyPlan.service";
 import { calculateNextReviewDate } from "../utils/reviewScheduler";
 
 export class ReviewService {
-  constructor(private readonly contentRepository: ContentRepository) {}
+  constructor(
+    private readonly contentRepository: ContentRepository,
+    private readonly dailyPlanService: DailyPlanService
+  ) {}
 
   async recordReview(userId: string, itemId: string, wasCorrect: boolean) {
     const payload = await this.contentRepository.getLearningContent(userId);
-    const item = payload.vocabulary.find((entry) => entry.id === itemId);
+    let item = payload.vocabulary.find((entry) => entry.id === itemId);
+
+    if (!item) {
+      const { user, dailyPlan } = await this.dailyPlanService.createOrGetTodayPlan(userId);
+      const personalized = this.contentRepository.personalizeForPlan(payload, user, dailyPlan);
+      item = personalized.vocabulary.find((entry) => entry.id === itemId);
+    }
 
     if (!item) {
       return null;
@@ -20,7 +30,7 @@ export class ReviewService {
     );
     const nextReviewAt = calculateNextReviewDate(nextHits, wasCorrect).toISOString();
 
-    return this.contentRepository.updateVocabularyReview(userId, itemId, {
+    return this.contentRepository.recordVocabularyReview(userId, item, {
       hits: nextHits,
       misses: nextMisses,
       confidence: nextConfidence,

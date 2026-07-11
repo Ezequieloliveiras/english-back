@@ -15,6 +15,16 @@ export class DailyPlanController {
     response.json(result);
   };
 
+  advanceToday = async (request: AuthenticatedRequest, response: Response) => {
+    if (!request.auth?.userId) {
+      response.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
+    const result = await this.dailyPlanService.advanceTodayPlan(request.auth.userId);
+    response.status(201).json(result);
+  };
+
   completeBlock = async (request: AuthenticatedRequest, response: Response) => {
     if (!request.auth?.userId) {
       response.status(401).json({ message: "Authentication required" });

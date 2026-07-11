@@ -34,6 +34,7 @@ const blockTemplates = {
         objective: "Revisit weak phrases using active recall and spaced repetition.",
     },
 };
+const blockTypeOrder = Object.keys(blockTemplates);
 const baseWeights = {
     shadowing: 0.22,
     "speaking-coach": 0.16,
@@ -134,7 +135,7 @@ class DailyPlanService {
     constructor(dailyPlanRepository) {
         this.dailyPlanRepository = dailyPlanRepository;
     }
-    generatePlan(profile, date = todayKey()) {
+    generatePlan(profile, date = todayKey(), rotation = 0) {
         const level = normalizeLevel(profile.currentLevel);
         const difficulty = normalizeDifficulty(profile.mainDifficulty);
         let weights = { ...baseWeights };
@@ -142,7 +143,12 @@ class DailyPlanService {
         weights = applyBoost(weights, levelBoost[level]);
         weights = applyBoost(weights, goalBoost(profile.primaryGoal));
         const allocations = distributeMinutes(profile.dailyMinutes, weights);
-        const blocks = allocations.map(({ type, minutes }, index) => ({
+        const rotationIndex = allocations.length ? Math.abs(rotation) % allocations.length : 0;
+        const orderedAllocations = [
+            ...allocations.slice(rotationIndex),
+            ...allocations.slice(0, rotationIndex),
+        ];
+        const blocks = orderedAllocations.map(({ type, minutes }, index) => ({
             id: `${date}-${type}-${index + 1}`,
             ...blockTemplates[type],
             durationMinutes: minutes,
@@ -186,6 +192,23 @@ class DailyPlanService {
             streak: progress.streakDays,
         });
         return { user, dailyPlan: plan, progress };
+    }
+    async advanceTodayPlan(userId) {
+        const resolvedUser = await this.dailyPlanRepository.findUserById(userId);
+        if (!resolvedUser) {
+            throw new Error("User not found");
+        }
+        const date = todayKey();
+        const existingPlan = await this.dailyPlanRepository.findPlanByUserAndDate(resolvedUser.id, date);
+        const progress = await this.dailyPlanRepository.findOrCreateProgress(resolvedUser);
+        const currentFirstType = existingPlan?.blocks[0]?.type;
+        const currentIndex = currentFirstType ? blockTypeOrder.indexOf(currentFirstType) : -1;
+        const rotation = currentIndex >= 0 ? currentIndex + 1 : 1;
+        const plan = await this.dailyPlanRepository.savePlan({
+            ...this.generatePlan(resolvedUser, date, rotation),
+            streak: progress.streakDays,
+        });
+        return { user: resolvedUser, dailyPlan: plan, progress };
     }
     async completeBlock(planId, blockId, userId) {
         const { user, dailyPlan, progress } = await this.createOrGetTodayPlan(userId);

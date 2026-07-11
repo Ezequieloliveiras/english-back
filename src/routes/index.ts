@@ -77,6 +77,7 @@ export const buildRouter = (
   router.post("/reviews/record", requireAuth, reviewController.record);
   router.post("/onboarding/plan", requireAuth, onboardingController.createPlan);
   router.get("/daily-plans/today", requireAuth, dailyPlanController.getToday);
+  router.post("/daily-plans/today/advance", requireAuth, dailyPlanController.advanceToday);
   router.patch("/daily-plans/blocks/complete", requireAuth, dailyPlanController.completeBlock);
   router.post("/ai/conversation", requireAuth, aiController.conversation);
   router.post("/ai/dev-mode", requireAuth, aiController.devMode);

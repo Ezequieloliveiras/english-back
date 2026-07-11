@@ -47,8 +47,8 @@ const authService = new AuthService(authRepository);
 const settingsService = new SettingsService(settingsRepository);
 const openAiService = new OpenAiService(aiRepository, settingsRepository);
 const conversationService = new ConversationService(openAiService);
-const reviewService = new ReviewService(contentRepository);
 const dailyPlanService = new DailyPlanService(dailyPlanRepository);
+const reviewService = new ReviewService(contentRepository, dailyPlanService);
 const contentService = new ContentService(
   contentRepository,
   dailyPlanService,

@@ -12,21 +12,21 @@ export class ContentService {
   ) {}
 
   async getBootstrap(userId: string) {
+    const { user, dailyPlan, progress } = await this.dailyPlanService.createOrGetTodayPlan(userId);
     const [
-      { user, dailyPlan, progress },
       content,
       settings,
       realProgressStats,
       recentSpeakingAttempts,
       reviewQueue,
     ] = await Promise.all([
-      this.dailyPlanService.createOrGetTodayPlan(userId),
       this.contentRepository.getLearningContent(userId),
       this.settingsRepository.findOrCreate(userId),
       this.aiRepository.getProgressStats(userId),
       this.aiRepository.getRecentSpeakingAttempts(userId),
       this.contentRepository.getDueReviewItems(userId),
     ]);
+    const personalizedContent = this.contentRepository.personalizeForPlan(content, user, dailyPlan);
 
     return {
       user,
@@ -42,7 +42,7 @@ export class ContentService {
         targetLevel: "B1",
         progress: progress.consistencyScore,
       },
-      ...content,
+      ...personalizedContent,
     };
   }
 }

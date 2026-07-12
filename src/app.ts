@@ -48,8 +48,8 @@ const audioService = new AudioService(audioCacheRepository, audioStorageService)
 const authService = new AuthService(authRepository);
 const settingsService = new SettingsService(settingsRepository);
 const openAiService = new OpenAiService(aiRepository, settingsRepository);
-const conversationService = new ConversationService(openAiService);
 const dailyPlanService = new DailyPlanService(dailyPlanRepository);
+const conversationService = new ConversationService(openAiService, dailyPlanService);
 const learningService = new LearningService();
 const reviewService = new ReviewService(contentRepository, dailyPlanService);
 const contentService = new ContentService(
@@ -59,7 +59,7 @@ const contentService = new ContentService(
   aiRepository
 );
 const onboardingService = new OnboardingService(dailyPlanService);
-const practiceService = new PracticeService(practiceRepository, learningService);
+const practiceService = new PracticeService(practiceRepository, learningService, dailyPlanService);
 
 const contentController = new ContentController(contentService);
 const audioController = new AudioController(audioService);
@@ -69,7 +69,7 @@ const reviewController = new ReviewController(reviewService);
 const onboardingController = new OnboardingController(onboardingService);
 const dailyPlanController = new DailyPlanController(dailyPlanService);
 const learningController = new LearningController(learningService);
-const aiController = new AiController(openAiService);
+const aiController = new AiController(openAiService, dailyPlanService);
 const practiceController = new PracticeController(practiceService);
 const settingsController = new SettingsController(settingsService);
 

@@ -195,7 +195,7 @@ const listeningLessons: ListeningLesson[] = [
           { text: "the login flow", meaning: "o fluxo de login" },
           { text: "and writing two tests", meaning: "e escrevendo dois testes" },
         ],
-        context: "Use para dar um update simples em uma reuniao de trabalho.",
+        context: "Use para dar um update simples em uma reunião de trabalho.",
         importantWords: [
           { text: "fixing", meaning: "corrigindo" },
           { text: "login flow", meaning: "fluxo de login" },
@@ -219,7 +219,7 @@ const listeningLessons: ListeningLesson[] = [
           { text: "I need access", meaning: "preciso de acesso" },
           { text: "to the staging logs", meaning: "aos logs de staging" },
         ],
-        context: "Use quando voce precisa explicar um bloqueio tecnico.",
+        context: "Use quando você precisa explicar um bloqueio técnico.",
         importantWords: [
           { text: "access", meaning: "acesso" },
           { text: "staging logs", meaning: "logs do ambiente de staging" },
@@ -300,16 +300,16 @@ const shadowingItems: ShadowingItem[] = [
     id: "s3",
     phrase: "Could you walk me through the next steps?",
     pronunciationHint: "Reduce 'could you' to sound more natural.",
-    naturalTranslation: "Voce poderia me explicar os proximos passos?",
+    naturalTranslation: "Você poderia me explicar os próximos passos?",
     chunks: [
-      { text: "Could you", meaning: "Voce poderia" },
+      { text: "Could you", meaning: "Você poderia" },
       { text: "walk me through", meaning: "me explicar passo a passo" },
-      { text: "the next steps", meaning: "os proximos passos" },
+      { text: "the next steps", meaning: "os próximos passos" },
     ],
-    context: "Use quando voce quer que alguem explique um processo com calma.",
+    context: "Use quando você quer que alguém explique um processo com calma.",
     importantWords: [
       { text: "walk me through", meaning: "explicar passo a passo" },
-      { text: "next steps", meaning: "proximos passos" },
+      { text: "next steps", meaning: "próximos passos" },
     ],
     pronunciationTip: "'could you' pode soar como 'couldja' em fala natural.",
     additionalExample: "Could you walk me through the setup?",
@@ -324,7 +324,7 @@ const shadowingItems: ShadowingItem[] = [
       { text: "a few more minutes", meaning: "de mais alguns minutos" },
       { text: "to finish this task", meaning: "para terminar esta tarefa" },
     ],
-    context: "Use quando voce precisa pedir um pouco mais de tempo no trabalho.",
+    context: "Use quando você precisa pedir um pouco mais de tempo no trabalho.",
     importantWords: [
       { text: "a few more minutes", meaning: "mais alguns minutos" },
       { text: "finish this task", meaning: "terminar esta tarefa" },

@@ -1,10 +1,33 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PracticeService = void 0;
+const activityTypeToDailyPlanEvidence = (type) => {
+    const normalized = type.trim().toLowerCase();
+    if (normalized === "listening") {
+        return { blockType: "listening", evidenceType: "listening_completion" };
+    }
+    if (normalized === "shadowing" || normalized === "repetition") {
+        return { blockType: "shadowing", evidenceType: "practice_completion" };
+    }
+    if (normalized === "speaking-coach" || normalized === "speaking_coach" || normalized === "pronunciation") {
+        return { blockType: "speaking-coach", evidenceType: "practice_completion" };
+    }
+    if (normalized === "conversation" || normalized === "think-in-english" || normalized === "developer-mode") {
+        return { blockType: "conversation", evidenceType: "practice_completion" };
+    }
+    if (normalized === "vocabulary") {
+        return { blockType: "vocabulary", evidenceType: "practice_completion" };
+    }
+    if (normalized === "review") {
+        return { blockType: "review", evidenceType: "practice_completion" };
+    }
+    return null;
+};
 class PracticeService {
-    constructor(practiceRepository, learningService) {
+    constructor(practiceRepository, learningService, dailyPlanService) {
         this.practiceRepository = practiceRepository;
         this.learningService = learningService;
+        this.dailyPlanService = dailyPlanService;
     }
     async completeActivity(input) {
         if (!input.type || !input.itemId || !input.title) {
@@ -16,6 +39,15 @@ class PracticeService {
             itemId: input.itemId,
             title: input.title,
         });
+        const evidence = activityTypeToDailyPlanEvidence(input.type);
+        if (evidence) {
+            await this.dailyPlanService?.recordBlockEvidence({
+                userId: input.userId,
+                blockType: evidence.blockType,
+                evidenceType: evidence.evidenceType,
+                evidenceRef: input.itemId,
+            });
+        }
         return {
             status: 200,
             body: {
@@ -54,6 +86,12 @@ class PracticeService {
             slowAudioUsed: Boolean(input.slowAudioUsed),
             replayCount: Math.max(0, Number(input.replayCount ?? 0)),
             unknownWords: Array.isArray(input.unknownWords) ? input.unknownWords : [],
+        });
+        await this.dailyPlanService?.recordBlockEvidence({
+            userId: input.userId,
+            blockType: "listening",
+            evidenceType: "listening_attempt",
+            evidenceRef: input.exerciseId,
         });
         return {
             status: 201,

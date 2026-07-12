@@ -22,12 +22,20 @@ class ReviewService {
         const nextMisses = wasCorrect ? item.misses : item.misses + 1;
         const nextConfidence = Math.max(10, Math.min(100, item.confidence + (wasCorrect ? 8 : -12)));
         const nextReviewAt = (0, reviewScheduler_1.calculateNextReviewDate)(nextHits, wasCorrect).toISOString();
-        return this.contentRepository.recordVocabularyReview(userId, item, {
+        const updated = await this.contentRepository.recordVocabularyReview(userId, item, {
             hits: nextHits,
             misses: nextMisses,
             confidence: nextConfidence,
             nextReviewAt,
         });
+        const isReviewQueueItem = item.category.toLowerCase().includes("review");
+        await this.dailyPlanService.recordBlockEvidence({
+            userId,
+            blockType: isReviewQueueItem ? "review" : "vocabulary",
+            evidenceType: isReviewQueueItem ? "retention_review" : "vocabulary_recall",
+            evidenceRef: itemId,
+        });
+        return updated;
     }
 }
 exports.ReviewService = ReviewService;

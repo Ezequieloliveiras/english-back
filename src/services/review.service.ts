@@ -30,11 +30,22 @@ export class ReviewService {
     );
     const nextReviewAt = calculateNextReviewDate(nextHits, wasCorrect).toISOString();
 
-    return this.contentRepository.recordVocabularyReview(userId, item, {
+    const updated = await this.contentRepository.recordVocabularyReview(userId, item, {
       hits: nextHits,
       misses: nextMisses,
       confidence: nextConfidence,
       nextReviewAt,
     });
+
+    const isReviewQueueItem = item.category.toLowerCase().includes("review");
+
+    await this.dailyPlanService.recordBlockEvidence({
+      userId,
+      blockType: isReviewQueueItem ? "review" : "vocabulary",
+      evidenceType: isReviewQueueItem ? "retention_review" : "vocabulary_recall",
+      evidenceRef: itemId,
+    });
+
+    return updated;
   }
 }

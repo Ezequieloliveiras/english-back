@@ -182,7 +182,25 @@ export type StudyBlockType =
   | "conversation"
   | "review";
 
-export type StudyStatus = "pending" | "in_progress" | "completed";
+export type StudyStatus =
+  | "pending"
+  | "not_started"
+  | "in_progress"
+  | "completed"
+  | "review_pending"
+  | "blocked";
+
+export type DailyPlanStepStatus = "not_started" | "in_progress" | "completed";
+
+export interface DailyPlanStep {
+  id: string;
+  label: string;
+  status: DailyPlanStepStatus;
+  required: boolean;
+  completedAt?: string | null;
+  evidenceType?: string;
+  evidenceRef?: string;
+}
 
 export interface StudyBlock {
   id: string;
@@ -192,6 +210,12 @@ export interface StudyBlock {
   status: StudyStatus;
   progress: number;
   objective: string;
+  requiredSteps?: DailyPlanStep[];
+  completedSteps?: number;
+  totalSteps?: number;
+  progressPercentage?: number;
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 export interface DailyPlan {
@@ -201,6 +225,8 @@ export interface DailyPlan {
   totalMinutes: number;
   streak: number;
   date: string;
+  status?: "not_started" | "in_progress" | "completed";
+  completedAt?: string | null;
   learningUnitId?: string;
   scenario?: string;
   targetCompetencies?: string[];

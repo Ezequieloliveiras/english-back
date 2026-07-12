@@ -1,10 +1,46 @@
 import { PracticeRepository } from "../repositories/practice.repository";
+import { StudyBlockType } from "../types";
+import { DailyPlanService } from "./dailyPlan.service";
 import { LearningService } from "./learning.service";
+
+const activityTypeToDailyPlanEvidence = (type: string): {
+  blockType: StudyBlockType;
+  evidenceType: string;
+} | null => {
+  const normalized = type.trim().toLowerCase();
+
+  if (normalized === "listening") {
+    return { blockType: "listening", evidenceType: "listening_completion" };
+  }
+
+  if (normalized === "shadowing" || normalized === "repetition") {
+    return { blockType: "shadowing", evidenceType: "practice_completion" };
+  }
+
+  if (normalized === "speaking-coach" || normalized === "speaking_coach" || normalized === "pronunciation") {
+    return { blockType: "speaking-coach", evidenceType: "practice_completion" };
+  }
+
+  if (normalized === "conversation" || normalized === "think-in-english" || normalized === "developer-mode") {
+    return { blockType: "conversation", evidenceType: "practice_completion" };
+  }
+
+  if (normalized === "vocabulary") {
+    return { blockType: "vocabulary", evidenceType: "practice_completion" };
+  }
+
+  if (normalized === "review") {
+    return { blockType: "review", evidenceType: "practice_completion" };
+  }
+
+  return null;
+};
 
 export class PracticeService {
   constructor(
     private readonly practiceRepository: PracticeRepository,
-    private readonly learningService?: LearningService
+    private readonly learningService?: LearningService,
+    private readonly dailyPlanService?: DailyPlanService
   ) {}
 
   async completeActivity(input: {
@@ -23,6 +59,16 @@ export class PracticeService {
       itemId: input.itemId,
       title: input.title,
     });
+    const evidence = activityTypeToDailyPlanEvidence(input.type);
+
+    if (evidence) {
+      await this.dailyPlanService?.recordBlockEvidence({
+        userId: input.userId,
+        blockType: evidence.blockType,
+        evidenceType: evidence.evidenceType,
+        evidenceRef: input.itemId,
+      });
+    }
 
     return {
       status: 200,
@@ -77,6 +123,12 @@ export class PracticeService {
       slowAudioUsed: Boolean(input.slowAudioUsed),
       replayCount: Math.max(0, Number(input.replayCount ?? 0)),
       unknownWords: Array.isArray(input.unknownWords) ? input.unknownWords : [],
+    });
+    await this.dailyPlanService?.recordBlockEvidence({
+      userId: input.userId,
+      blockType: "listening",
+      evidenceType: "listening_attempt",
+      evidenceRef: input.exerciseId,
     });
 
     return {

@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
+import { DailyPlanService } from "../services/dailyPlan.service";
 import { AiProviderError, OpenAiService } from "../services/openai.service";
 
 const MAX_MESSAGE_LENGTH = 1600;
@@ -32,7 +33,10 @@ const validateUserMessage = (body: { message?: string }, response: Response) => 
 };
 
 export class AiController {
-  constructor(private readonly openAiService: OpenAiService) {}
+  constructor(
+    private readonly openAiService: OpenAiService,
+    private readonly dailyPlanService?: DailyPlanService
+  ) {}
 
   conversation = async (request: AuthenticatedRequest, response: Response) => {
     try {
@@ -41,6 +45,12 @@ export class AiController {
       const result = await this.openAiService.generateConversationReply({
         ...request.body,
         userId: request.auth.userId,
+      });
+      await this.dailyPlanService?.recordBlockEvidence({
+        userId: request.auth.userId,
+        blockType: "conversation",
+        evidenceType: "conversation_task",
+        evidenceRef: request.body.mode ?? request.body.modeId,
       });
       response.json(result);
     } catch (error) {
@@ -56,6 +66,12 @@ export class AiController {
         ...request.body,
         userId: request.auth.userId,
       });
+      await this.dailyPlanService?.recordBlockEvidence({
+        userId: request.auth.userId,
+        blockType: "conversation",
+        evidenceType: "conversation_task",
+        evidenceRef: request.body.scenario ?? "developer-mode",
+      });
       response.json(result);
     } catch (error) {
       sendAiError(response, error, "AI developer mode failed");
@@ -70,6 +86,12 @@ export class AiController {
         ...request.body,
         userId: request.auth.userId,
       });
+      await this.dailyPlanService?.recordBlockEvidence({
+        userId: request.auth.userId,
+        blockType: "conversation",
+        evidenceType: "conversation_task",
+        evidenceRef: request.body.promptId ?? "think-in-english",
+      });
       response.json(result);
     } catch (error) {
       sendAiError(response, error, "AI think in English failed");
@@ -82,6 +104,12 @@ export class AiController {
       const result = await this.openAiService.generateVocabularyExamples({
         ...request.body,
         userId: request.auth.userId,
+      });
+      await this.dailyPlanService?.recordBlockEvidence({
+        userId: request.auth.userId,
+        blockType: "vocabulary",
+        evidenceType: "vocabulary_recall",
+        evidenceRef: request.body.phrase ?? request.body.topic ?? "vocabulary",
       });
       response.json(result);
     } catch (error) {
@@ -132,6 +160,12 @@ export class AiController {
         focus,
         context,
         level,
+      });
+      await this.dailyPlanService?.recordBlockEvidence({
+        userId: request.auth.userId,
+        blockType: "speaking-coach",
+        evidenceType: "pronunciation_analysis",
+        evidenceRef: targetPhrase.trim(),
       });
       response.json(result);
     } catch (error) {

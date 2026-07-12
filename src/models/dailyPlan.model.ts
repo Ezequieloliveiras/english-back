@@ -1,5 +1,18 @@
 import { Schema, model } from "mongoose";
 
+const dailyPlanStepSchema = new Schema(
+  {
+    id: { type: String, required: true },
+    label: { type: String, required: true },
+    status: { type: String, required: true, default: "not_started" },
+    required: { type: Boolean, required: true, default: true },
+    completedAt: { type: String, default: null },
+    evidenceType: { type: String },
+    evidenceRef: { type: String },
+  },
+  { _id: false }
+);
+
 const studyBlockSchema = new Schema(
   {
     id: { type: String, required: true },
@@ -9,6 +22,12 @@ const studyBlockSchema = new Schema(
     status: { type: String, required: true },
     progress: { type: Number, required: true },
     objective: { type: String, required: true },
+    requiredSteps: { type: [dailyPlanStepSchema], required: true, default: [] },
+    completedSteps: { type: Number, required: true, default: 0 },
+    totalSteps: { type: Number, required: true, default: 0 },
+    progressPercentage: { type: Number, required: true, default: 0 },
+    startedAt: { type: String, default: null },
+    completedAt: { type: String, default: null },
   },
   { _id: false }
 );
@@ -20,6 +39,8 @@ const dailyPlanSchema = new Schema(
     totalMinutes: { type: Number, required: true },
     streak: { type: Number, required: true },
     date: { type: String, required: true },
+    status: { type: String, required: true, default: "not_started" },
+    completedAt: { type: String, default: null },
     learningUnitId: { type: String },
     scenario: { type: String },
     targetCompetencies: { type: [String], required: true, default: [] },

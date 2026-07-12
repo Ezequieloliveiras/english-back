@@ -2,8 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConversationService = void 0;
 class ConversationService {
-    constructor(openAiService) {
+    constructor(openAiService, dailyPlanService) {
         this.openAiService = openAiService;
+        this.dailyPlanService = dailyPlanService;
     }
     async reply(userId, modeId, message) {
         if (!this.openAiService) {
@@ -14,6 +15,12 @@ class ConversationService {
             mode: modeId,
             message,
             level: "A1",
+        });
+        await this.dailyPlanService?.recordBlockEvidence({
+            userId,
+            blockType: "conversation",
+            evidenceType: "conversation_task",
+            evidenceRef: modeId,
         });
         return {
             role: "assistant",

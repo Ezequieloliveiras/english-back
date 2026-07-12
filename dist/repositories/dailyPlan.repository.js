@@ -18,6 +18,20 @@ const mapBlock = (block) => ({
     status: block.status,
     progress: block.progress,
     objective: block.objective,
+    requiredSteps: (block.requiredSteps ?? []).map((step) => ({
+        id: step.id,
+        label: step.label,
+        status: step.status,
+        required: Boolean(step.required),
+        completedAt: step.completedAt ?? null,
+        evidenceType: step.evidenceType,
+        evidenceRef: step.evidenceRef,
+    })),
+    completedSteps: block.completedSteps ?? 0,
+    totalSteps: block.totalSteps ?? 0,
+    progressPercentage: block.progressPercentage ?? block.progress ?? 0,
+    startedAt: block.startedAt ?? null,
+    completedAt: block.completedAt ?? null,
 });
 const mapPlan = (plan) => ({
     id: toPlainId(plan._id ?? plan.id),
@@ -26,6 +40,8 @@ const mapPlan = (plan) => ({
     totalMinutes: plan.totalMinutes,
     streak: plan.streak,
     date: plan.date,
+    status: plan.status ?? "not_started",
+    completedAt: plan.completedAt ?? null,
     learningUnitId: plan.learningUnitId,
     scenario: plan.scenario,
     targetCompetencies: plan.targetCompetencies ?? [],
@@ -130,6 +146,8 @@ class DailyPlanRepository {
                 totalMinutes: plan.totalMinutes,
                 streak: plan.streak,
                 date: plan.date,
+                status: plan.status ?? "not_started",
+                completedAt: plan.completedAt ?? null,
                 learningUnitId: plan.learningUnitId,
                 scenario: plan.scenario,
                 targetCompetencies: plan.targetCompetencies ?? [],
@@ -144,7 +162,7 @@ class DailyPlanRepository {
             memoryState.plans.set(`${plan.userId}:${plan.date}`, plan);
             return plan;
         }
-        const updated = await dailyPlan_model_1.DailyPlanModel.findByIdAndUpdate(plan.id, { $set: { blocks: plan.blocks } }, { new: true });
+        const updated = await dailyPlan_model_1.DailyPlanModel.findByIdAndUpdate(plan.id, { $set: { blocks: plan.blocks, status: plan.status ?? "not_started", completedAt: plan.completedAt ?? null } }, { new: true });
         return updated ? mapPlan(updated) : null;
     }
     async findOrCreateProgress(user) {

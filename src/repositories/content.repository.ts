@@ -84,10 +84,10 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
         "Student: I can explain my next step in simple English.",
       ],
       translations: [
-        "Qual e o seu foco principal nesta sessao?",
-        `Eu quero praticar ingles para ${goal}.`,
-        "Certo. Qual e uma pequena tarefa que voce consegue terminar agora?",
-        "Eu consigo explicar meu proximo passo em ingles simples.",
+        "Qual é o seu foco principal nesta sessão?",
+        `Eu quero praticar inglês para ${goal}.`,
+        "Certo. Qual é uma pequena tarefa que você consegue terminar agora?",
+        "Eu consigo explicar meu próximo passo em inglês simples.",
       ],
       questions: [
         { prompt: "What does the student want to practice?", answer: goal },
@@ -104,9 +104,9 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
         `Student: I need the goal and the expected result for this ${profession} task.`,
       ],
       translations: [
-        "Voce esta bloqueado em alguma coisa agora?",
+        "Você está bloqueado em alguma coisa agora?",
         "Sim, eu preciso de mais contexto antes de continuar.",
-        "De que contexto voce precisa?",
+        "De que contexto você precisa?",
         `Eu preciso do objetivo e do resultado esperado para esta tarefa de ${profession}.`,
       ],
       questions: [
@@ -124,9 +124,9 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
         "Student: I should repeat the strongest phrases out loud.",
       ],
       translations: [
-        "O que voce praticou neste ciclo?",
-        "Eu pratiquei respostas curtas e frases uteis de trabalho.",
-        "O que voce deve fazer agora?",
+        "O que você praticou neste ciclo?",
+        "Eu pratiquei respostas curtas e frases úteis de trabalho.",
+        "O que você deve fazer agora?",
         "Eu devo repetir as frases mais fortes em voz alta.",
       ],
       questions: [
@@ -144,9 +144,9 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
         "Student: I want to confirm the priority and the deadline.",
       ],
       translations: [
-        "Voce consegue cuidar disso hoje?",
+        "Você consegue cuidar disso hoje?",
         "Eu consigo, mas preciso confirmar um detalhe primeiro.",
-        "Claro. O que voce quer confirmar?",
+        "Claro. O que você quer confirmar?",
         "Eu quero confirmar a prioridade e o prazo.",
       ],
       questions: [
@@ -189,7 +189,7 @@ const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan): List
     })),
     comprehension: scenario.dialogue.map((line, index) => {
       const text = line.includes(":") ? line.slice(line.indexOf(":") + 1).trim() : line;
-      const translation = scenario.translations[index] ?? "Traducao em portugues indisponivel.";
+      const translation = scenario.translations[index] ?? "Tradução em português indisponível.";
 
       return {
         sourceText: text,
@@ -212,19 +212,19 @@ const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan): Shado
       {
         id: `plan-shadowing-${dailyPlan.date}-${rotation}-1`,
         phrase: "I can explain the next step in simple English.",
-        naturalTranslation: "Eu consigo explicar o proximo passo em ingles simples.",
+        naturalTranslation: "Eu consigo explicar o próximo passo em inglês simples.",
         pronunciationHint: "Stress 'next step' and keep the ending clear.",
         context: `Use this for ${profession} updates.`,
         chunks: [
           { text: "I can explain", meaning: "Eu consigo explicar" },
-          { text: "the next step", meaning: "o proximo passo" },
-          { text: "in simple English", meaning: "em ingles simples" },
+          { text: "the next step", meaning: "o próximo passo" },
+          { text: "in simple English", meaning: "em inglês simples" },
         ],
       },
       {
         id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
         phrase: `My goal today is to practice: ${goal}.`,
-        naturalTranslation: `Meu objetivo hoje e praticar: ${goal}.`,
+        naturalTranslation: `Meu objetivo hoje é praticar: ${goal}.`,
         pronunciationHint: "Pause briefly after 'today' and finish with confidence.",
         chunks: [
           { text: "My goal today", meaning: "Meu objetivo hoje" },
@@ -247,10 +247,10 @@ const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan): Shado
       {
         id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
         phrase: "Could you give me one example, please?",
-        naturalTranslation: "Voce poderia me dar um exemplo, por favor?",
+        naturalTranslation: "Você poderia me dar um exemplo, por favor?",
         pronunciationHint: "Reduce 'could you' and stress 'one example'.",
         chunks: [
-          { text: "Could you give me", meaning: "Voce poderia me dar" },
+          { text: "Could you give me", meaning: "Você poderia me dar" },
           { text: "one example", meaning: "um exemplo" },
           { text: "please", meaning: "por favor" },
         ],
@@ -290,11 +290,11 @@ const buildPlanVocabulary = (user: UserProfile, dailyPlan: DailyPlan): Vocabular
     {
       id: `plan-vocab-${dailyPlan.date}-${rotation}-2`,
       phrase: "I can explain my next step clearly.",
-      translation: "Eu consigo explicar meu proximo passo com clareza.",
+      translation: "Eu consigo explicar meu próximo passo com clareza.",
       level: user.currentLevel,
       category: "Current plan",
       sentences: [
-        { text: "I can explain my next step clearly.", translation: "Eu consigo explicar meu proximo passo com clareza." },
+        { text: "I can explain my next step clearly.", translation: "Eu consigo explicar meu próximo passo com clareza." },
         { text: "I can explain the blocker clearly.", translation: "Eu consigo explicar o bloqueio com clareza." },
         { text: "I can explain the expected result clearly.", translation: "Eu consigo explicar o resultado esperado com clareza." },
       ],

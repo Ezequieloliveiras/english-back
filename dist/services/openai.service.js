@@ -46,18 +46,18 @@ class AiProviderError extends Error {
 }
 exports.AiProviderError = AiProviderError;
 const basePrompt = `
-Voce e um professor de ingles senior com mais de 20 anos de experiencia.
-Seu aluno e iniciante e precisa aprender ingles rapidamente para se comunicar.
-Priorize fala, listening, frases uteis e confianca.
+Você é um professor de inglês sênior com mais de 20 anos de experiência.
+Seu aluno é iniciante e precisa aprender inglês rapidamente para se comunicar.
+Priorize fala, listening, frases úteis e confiança.
 Corrija somente erros importantes.
-Nao interrompa a fluencia por pequenos erros.
-Sempre responda em ingles simples, nivel A1/A2.
-Quando necessario, explique rapidamente em portugues.
-Nunca de aulas longas de gramatica.
-Faca perguntas curtas para manter a conversa.
+Não interrompa a fluência por pequenos erros.
+Use inglês simples, nível A1/A2, nas frases de treino e nas respostas que o aluno deve praticar.
+Quando o usuário estiver com suporte em português, explique instruções, feedback e raciocínio pedagógico em português brasileiro.
+Nunca dê aulas longas de gramática.
+Faça perguntas curtas para manter a conversa.
 Use frases naturais do dia a dia.
-Quando o modo for desenvolvedor, use contexto de programacao, APIs, bugs, deploy, banco de dados, frontend, backend e reunioes tecnicas.
-Retorne sempre JSON valido, sem markdown.
+Quando o modo for desenvolvedor, use contexto de programação, APIs, bugs, deploy, banco de dados, frontend, backend e reuniões técnicas.
+Retorne sempre JSON válido, sem markdown.
 `;
 const developerContexts = `
 Developer prompts:
@@ -68,7 +68,7 @@ Developer prompts:
 - participar de daily
 - explicar pull request
 - falar com cliente
-Use frases curtas e naturais para contexto tecnico.
+Use frases curtas e naturais para contexto técnico.
 `;
 const parseJson = (text) => {
     const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
@@ -205,7 +205,7 @@ ${languageInstruction(settings)}
 Return this JSON shape:
 {"reply":"short answer","correction":"short correction if needed","suggestedPhrase":"better phrase","nextQuestion":"short next question","level":"A1"}
 Modo escolhido: ${input.mode}
-Nivel: ${input.level ?? "A1"}
+Nível: ${input.level ?? "A1"}
 Objetivo: ${input.goal ?? "comunicacao real"}
 `,
             userContent: JSON.stringify({
@@ -225,9 +225,9 @@ ${developerContexts}
 ${languageInstruction(settings)}
 Return this JSON shape:
 {"reply":"short answer","correction":"short correction if needed","suggestedPhrase":"better technical phrase","nextQuestion":"short technical next question","level":"A1"}
-Modo tecnico: ${input.mode}
-Nivel: ${input.level ?? "A1"}
-Objetivo: ${input.goal ?? "ingles tecnico para trabalho"}
+Modo técnico: ${input.mode}
+Nível: ${input.level ?? "A1"}
+Objetivo: ${input.goal ?? "inglês técnico para trabalho"}
 `,
             userContent: JSON.stringify({
                 recentHistory: limitMessages(input.previousMessages),
@@ -243,7 +243,7 @@ Objetivo: ${input.goal ?? "ingles tecnico para trabalho"}
             mode: "think-in-english",
             instructions: `
 ${languageInstruction(settings)}
-Se o usuario pedir traducao palavra por palavra, incentive descricao em ingles primeiro.
+Se o usuário pedir tradução palavra por palavra, incentive a descrição em inglês primeiro.
 Return this JSON shape:
 {"reply":"short answer in simple English","correction":"","suggestedPhrase":"useful phrase","nextQuestion":"short question","level":"A1"}
 `,
@@ -261,7 +261,7 @@ Return this JSON shape:
             mode: "vocabulary",
             instructions: `
 ${languageInstruction(settings)}
-Crie vocabulario sempre com frases completas, nunca palavras isoladas.
+Crie vocabulário sempre com frases completas, nunca palavras isoladas.
 Return this JSON shape:
 {"topic":"topic","level":"A1","examples":[{"phrase":"English phrase","translation":"short translation when Portuguese support is enabled, otherwise English meaning","category":"category"}]}
 `,
@@ -272,10 +272,10 @@ Return this JSON shape:
         return this.createJsonResponse({
             mode: "daily-plan",
             instructions: `
-Monte uma rotina curta de ingles para hoje.
+Monte uma rotina curta de inglês para hoje.
 Retorne:
 {"focus":"foco do dia","blocks":[{"title":"Shadowing","durationMinutes":8,"objective":"objetivo curto"}]}
-Use os minutos disponiveis sem ultrapassar o total.
+Use os minutos disponíveis sem ultrapassar o total.
 `,
             userContent: JSON.stringify(input),
         });

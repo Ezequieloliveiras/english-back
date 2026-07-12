@@ -25,8 +25,9 @@ const validateUserMessage = (body, response) => {
     return true;
 };
 class AiController {
-    constructor(openAiService) {
+    constructor(openAiService, dailyPlanService) {
         this.openAiService = openAiService;
+        this.dailyPlanService = dailyPlanService;
         this.conversation = async (request, response) => {
             try {
                 if (!request.auth?.userId)
@@ -36,6 +37,12 @@ class AiController {
                 const result = await this.openAiService.generateConversationReply({
                     ...request.body,
                     userId: request.auth.userId,
+                });
+                await this.dailyPlanService?.recordBlockEvidence({
+                    userId: request.auth.userId,
+                    blockType: "conversation",
+                    evidenceType: "conversation_task",
+                    evidenceRef: request.body.mode ?? request.body.modeId,
                 });
                 response.json(result);
             }
@@ -53,6 +60,12 @@ class AiController {
                     ...request.body,
                     userId: request.auth.userId,
                 });
+                await this.dailyPlanService?.recordBlockEvidence({
+                    userId: request.auth.userId,
+                    blockType: "conversation",
+                    evidenceType: "conversation_task",
+                    evidenceRef: request.body.scenario ?? "developer-mode",
+                });
                 response.json(result);
             }
             catch (error) {
@@ -69,6 +82,12 @@ class AiController {
                     ...request.body,
                     userId: request.auth.userId,
                 });
+                await this.dailyPlanService?.recordBlockEvidence({
+                    userId: request.auth.userId,
+                    blockType: "conversation",
+                    evidenceType: "conversation_task",
+                    evidenceRef: request.body.promptId ?? "think-in-english",
+                });
                 response.json(result);
             }
             catch (error) {
@@ -82,6 +101,12 @@ class AiController {
                 const result = await this.openAiService.generateVocabularyExamples({
                     ...request.body,
                     userId: request.auth.userId,
+                });
+                await this.dailyPlanService?.recordBlockEvidence({
+                    userId: request.auth.userId,
+                    blockType: "vocabulary",
+                    evidenceType: "vocabulary_recall",
+                    evidenceRef: request.body.phrase ?? request.body.topic ?? "vocabulary",
                 });
                 response.json(result);
             }
@@ -129,6 +154,12 @@ class AiController {
                     focus,
                     context,
                     level,
+                });
+                await this.dailyPlanService?.recordBlockEvidence({
+                    userId: request.auth.userId,
+                    blockType: "speaking-coach",
+                    evidenceType: "pronunciation_analysis",
+                    evidenceRef: targetPhrase.trim(),
                 });
                 response.json(result);
             }

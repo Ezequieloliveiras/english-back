@@ -36,6 +36,104 @@ const blockTemplates = {
     },
 };
 const blockTypeOrder = Object.keys(blockTemplates);
+const requiredStepTemplates = {
+    listening: [
+        { id: "listen-required-lines", label: "Ouvir as falas obrigatórias" },
+        { id: "answer-comprehension", label: "Responder à compreensão" },
+        { id: "complete-required-lines", label: "Concluir as falas exigidas" },
+        { id: "finish-conversation", label: "Finalizar a conversa" },
+    ],
+    shadowing: [
+        { id: "play-phrase", label: "Reproduzir a frase" },
+        { id: "repeat-phrase", label: "Repetir com ritmo" },
+        { id: "finish-required-phrases", label: "Finalizar as frases do bloco" },
+    ],
+    "speaking-coach": [
+        { id: "record-required-phrase", label: "Realizar a gravação obrigatória" },
+        { id: "receive-analysis", label: "Receber análise de pronúncia" },
+        { id: "register-result", label: "Registrar o resultado da frase" },
+    ],
+    conversation: [
+        { id: "start-conversation", label: "Iniciar a conversa" },
+        { id: "answer-required-steps", label: "Responder às etapas obrigatórias" },
+        { id: "finish-communicative-goal", label: "Concluir o objetivo comunicativo" },
+    ],
+    vocabulary: [
+        { id: "review-planned-items", label: "Revisar os itens previstos" },
+        { id: "answer-required-exercises", label: "Responder aos exercícios obrigatórios" },
+        { id: "complete-active-recall", label: "Concluir recall ou uso ativo" },
+    ],
+    review: [
+        { id: "finish-due-items", label: "Finalizar os itens vencidos" },
+        { id: "register-review-result", label: "Registrar o resultado da revisão" },
+    ],
+};
+const buildRequiredSteps = (type) => requiredStepTemplates[type].map((step) => ({
+    ...step,
+    status: "not_started",
+    required: true,
+    completedAt: null,
+}));
+const evidenceToSteps = {
+    listening: {
+        listening_attempt: ["listen-required-lines", "answer-comprehension"],
+        listening_completion: ["complete-required-lines", "finish-conversation"],
+    },
+    shadowing: {
+        practice_completion: ["play-phrase", "repeat-phrase", "finish-required-phrases"],
+    },
+    "speaking-coach": {
+        pronunciation_analysis: ["record-required-phrase", "receive-analysis", "register-result"],
+        practice_completion: ["record-required-phrase", "receive-analysis", "register-result"],
+    },
+    conversation: {
+        conversation_task: ["start-conversation", "answer-required-steps", "finish-communicative-goal"],
+        practice_completion: ["start-conversation", "answer-required-steps", "finish-communicative-goal"],
+    },
+    vocabulary: {
+        vocabulary_recall: ["review-planned-items", "answer-required-exercises", "complete-active-recall"],
+        practice_completion: ["review-planned-items", "answer-required-exercises", "complete-active-recall"],
+    },
+    review: {
+        retention_review: ["finish-due-items", "register-review-result"],
+        practice_completion: ["finish-due-items", "register-review-result"],
+    },
+};
+const normalizeBlockStatus = (status) => status === "pending" ? "not_started" : status ?? "not_started";
+const calculateBlockProgress = (block) => {
+    const requiredSteps = block.requiredSteps?.length ? block.requiredSteps : buildRequiredSteps(block.type);
+    const totalSteps = requiredSteps.filter((step) => step.required).length;
+    const completedSteps = requiredSteps.filter((step) => step.required && step.status === "completed").length;
+    const progressPercentage = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
+    const status = progressPercentage === 100
+        ? "completed"
+        : progressPercentage > 0
+            ? "in_progress"
+            : normalizeBlockStatus(block.status) === "blocked" || normalizeBlockStatus(block.status) === "review_pending"
+                ? normalizeBlockStatus(block.status)
+                : "not_started";
+    return {
+        ...block,
+        requiredSteps,
+        totalSteps,
+        completedSteps,
+        progress: progressPercentage,
+        progressPercentage,
+        status,
+        startedAt: block.startedAt ?? (progressPercentage > 0 ? new Date().toISOString() : null),
+        completedAt: status === "completed" ? block.completedAt ?? new Date().toISOString() : null,
+    };
+};
+const calculatePlanStatus = (plan) => {
+    const completedBlocks = plan.blocks.filter((block) => block.status === "completed").length;
+    if (plan.blocks.length > 0 && completedBlocks === plan.blocks.length) {
+        return { status: "completed", completedAt: plan.completedAt ?? new Date().toISOString() };
+    }
+    if (plan.blocks.some((block) => block.status === "in_progress" || block.status === "completed")) {
+        return { status: "in_progress", completedAt: null };
+    }
+    return { status: "not_started", completedAt: null };
+};
 const baseWeights = {
     shadowing: 0.22,
     "speaking-coach": 0.16,
@@ -167,8 +265,14 @@ class DailyPlanService {
             id: `${date}-${type}-${index + 1}`,
             ...blockTemplates[type],
             durationMinutes: minutes,
-            status: "pending",
+            status: "not_started",
             progress: 0,
+            requiredSteps: buildRequiredSteps(type),
+            completedSteps: 0,
+            totalSteps: requiredStepTemplates[type].length,
+            progressPercentage: 0,
+            startedAt: null,
+            completedAt: null,
         }));
         return {
             userId: profile.id,
@@ -178,12 +282,31 @@ class DailyPlanService {
             totalMinutes: blocks.reduce((sum, block) => sum + block.durationMinutes, 0),
             streak: 0,
             date,
+            status: "not_started",
+            completedAt: null,
             learningUnitId: learningUnit?.id,
             scenario: learningUnit?.scenario,
             targetCompetencies: learningUnit?.competencies ?? [],
             targetChunks: learningUnit?.vocabularyChunks ?? [],
             blocks,
         };
+    }
+    normalizePlan(plan) {
+        const blocks = plan.blocks.map((block) => calculateBlockProgress(block));
+        const planStatus = calculatePlanStatus({ ...plan, blocks });
+        return {
+            ...plan,
+            ...planStatus,
+            blocks,
+        };
+    }
+    async persistNormalizedPlan(plan) {
+        const normalized = this.normalizePlan(plan);
+        const needsPersistence = JSON.stringify(normalized) !== JSON.stringify(plan);
+        if (!needsPersistence) {
+            return normalized;
+        }
+        return (await this.dailyPlanRepository.updatePlanBlocks(normalized)) ?? normalized;
     }
     async createOrGetTodayPlan(userId) {
         const resolvedUser = await this.dailyPlanRepository.findUserById(userId);
@@ -194,7 +317,8 @@ class DailyPlanService {
         const existingPlan = await this.dailyPlanRepository.findPlanByUserAndDate(resolvedUser.id, date);
         const progress = await this.dailyPlanRepository.findOrCreateProgress(resolvedUser);
         if (existingPlan) {
-            return { user: resolvedUser, dailyPlan: existingPlan, progress };
+            const normalizedPlan = await this.persistNormalizedPlan(existingPlan);
+            return { user: resolvedUser, dailyPlan: normalizedPlan, progress };
         }
         const plan = await this.dailyPlanRepository.savePlan({
             ...this.generatePlan(resolvedUser, date),
@@ -241,25 +365,66 @@ class DailyPlanService {
         if (!block) {
             return null;
         }
+        const normalizedPlan = await this.persistNormalizedPlan(plan);
+        return { user, dailyPlan: normalizedPlan, progress };
+    }
+    async recordBlockEvidence(input) {
+        const { user, dailyPlan, progress } = await this.createOrGetTodayPlan(input.userId);
+        const plan = await this.persistNormalizedPlan(dailyPlan);
+        const block = plan.blocks.find((entry) => entry.type === input.blockType && entry.status !== "completed")
+            ?? plan.blocks.find((entry) => entry.type === input.blockType);
+        if (!block) {
+            return { user, dailyPlan: plan, progress };
+        }
+        const stepIds = evidenceToSteps[input.blockType][input.evidenceType] ?? [];
+        if (stepIds.length === 0) {
+            return { user, dailyPlan: plan, progress };
+        }
+        const completedAt = new Date().toISOString();
+        const updatedBlock = calculateBlockProgress({
+            ...block,
+            requiredSteps: (block.requiredSteps ?? buildRequiredSteps(block.type)).map((step) => stepIds.includes(step.id) && step.status !== "completed"
+                ? {
+                    ...step,
+                    status: "completed",
+                    completedAt,
+                    evidenceType: input.evidenceType,
+                    evidenceRef: input.evidenceRef,
+                }
+                : step),
+            startedAt: block.startedAt ?? completedAt,
+        });
+        if (updatedBlock.completedSteps === block.completedSteps &&
+            updatedBlock.progressPercentage === block.progressPercentage &&
+            updatedBlock.status === block.status) {
+            return { user, dailyPlan: plan, progress };
+        }
         const wasCompleted = block.status === "completed";
-        const updatedBlocks = plan.blocks.map((entry) => entry.id === blockId
-            ? { ...entry, status: "completed", progress: 100 }
-            : entry);
+        const wasPlanCompleted = plan.status === "completed";
+        const updatedBlocks = plan.blocks.map((entry) => (entry.id === block.id ? updatedBlock : entry));
+        const planStatus = calculatePlanStatus({ ...plan, blocks: updatedBlocks });
+        const completedPlanNow = !wasPlanCompleted && planStatus.status === "completed";
+        const nextStreakDays = completedPlanNow ? progress.streakDays + 1 : progress.streakDays;
         const updatedPlan = await this.dailyPlanRepository.updatePlanBlocks({
             ...plan,
+            ...planStatus,
+            streak: nextStreakDays,
             blocks: updatedBlocks,
         });
         const studiedMinutesToday = wasCompleted
             ? progress.studiedMinutesToday
-            : progress.studiedMinutesToday + block.durationMinutes;
+            : updatedBlock.status === "completed"
+                ? progress.studiedMinutesToday + block.durationMinutes
+                : progress.studiedMinutesToday;
         const completedBlocks = updatedBlocks.filter((entry) => entry.status === "completed").length;
         const consistencyScore = Math.min(100, Math.round((completedBlocks / updatedBlocks.length) * 100));
         const updatedProgress = await this.dailyPlanRepository.saveProgress(user.id, {
             ...progress,
             studiedMinutesToday,
+            streakDays: nextStreakDays,
             consistencyScore: Math.max(progress.consistencyScore, consistencyScore),
         });
-        return { user, dailyPlan: updatedPlan, progress: updatedProgress };
+        return { user, dailyPlan: updatedPlan ?? plan, progress: updatedProgress };
     }
 }
 exports.DailyPlanService = DailyPlanService;

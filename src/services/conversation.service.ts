@@ -1,8 +1,12 @@
 import { ConversationMessage } from "../types";
+import { DailyPlanService } from "./dailyPlan.service";
 import { OpenAiService } from "./openai.service";
 
 export class ConversationService {
-  constructor(private readonly openAiService?: OpenAiService) {}
+  constructor(
+    private readonly openAiService?: OpenAiService,
+    private readonly dailyPlanService?: DailyPlanService
+  ) {}
 
   async reply(userId: string, modeId: string, message: string): Promise<ConversationMessage> {
     if (!this.openAiService) {
@@ -14,6 +18,12 @@ export class ConversationService {
       mode: modeId,
       message,
       level: "A1",
+    });
+    await this.dailyPlanService?.recordBlockEvidence({
+      userId,
+      blockType: "conversation",
+      evidenceType: "conversation_task",
+      evidenceRef: modeId,
     });
 
     return {

@@ -16,6 +16,20 @@ const mapBlock = (block: any): StudyBlock => ({
   status: block.status,
   progress: block.progress,
   objective: block.objective,
+  requiredSteps: (block.requiredSteps ?? []).map((step: any) => ({
+    id: step.id,
+    label: step.label,
+    status: step.status,
+    required: Boolean(step.required),
+    completedAt: step.completedAt ?? null,
+    evidenceType: step.evidenceType,
+    evidenceRef: step.evidenceRef,
+  })),
+  completedSteps: block.completedSteps ?? 0,
+  totalSteps: block.totalSteps ?? 0,
+  progressPercentage: block.progressPercentage ?? block.progress ?? 0,
+  startedAt: block.startedAt ?? null,
+  completedAt: block.completedAt ?? null,
 });
 
 const mapPlan = (plan: any): DailyPlan => ({
@@ -25,6 +39,8 @@ const mapPlan = (plan: any): DailyPlan => ({
   totalMinutes: plan.totalMinutes,
   streak: plan.streak,
   date: plan.date,
+  status: plan.status ?? "not_started",
+  completedAt: plan.completedAt ?? null,
   learningUnitId: plan.learningUnitId,
   scenario: plan.scenario,
   targetCompetencies: plan.targetCompetencies ?? [],
@@ -154,6 +170,8 @@ export class DailyPlanRepository {
           totalMinutes: plan.totalMinutes,
           streak: plan.streak,
           date: plan.date,
+          status: plan.status ?? "not_started",
+          completedAt: plan.completedAt ?? null,
           learningUnitId: plan.learningUnitId,
           scenario: plan.scenario,
           targetCompetencies: plan.targetCompetencies ?? [],
@@ -175,7 +193,7 @@ export class DailyPlanRepository {
 
     const updated = await DailyPlanModel.findByIdAndUpdate(
       plan.id,
-      { $set: { blocks: plan.blocks } },
+      { $set: { blocks: plan.blocks, status: plan.status ?? "not_started", completedAt: plan.completedAt ?? null } },
       { new: true }
     );
 

@@ -26,6 +26,10 @@ const mapPlan = (plan) => ({
     totalMinutes: plan.totalMinutes,
     streak: plan.streak,
     date: plan.date,
+    learningUnitId: plan.learningUnitId,
+    scenario: plan.scenario,
+    targetCompetencies: plan.targetCompetencies ?? [],
+    targetChunks: plan.targetChunks ?? [],
     blocks: plan.blocks.map(mapBlock),
 });
 const mapUser = (user) => ({
@@ -126,6 +130,10 @@ class DailyPlanRepository {
                 totalMinutes: plan.totalMinutes,
                 streak: plan.streak,
                 date: plan.date,
+                learningUnitId: plan.learningUnitId,
+                scenario: plan.scenario,
+                targetCompetencies: plan.targetCompetencies ?? [],
+                targetChunks: plan.targetChunks ?? [],
                 blocks: plan.blocks,
             },
         }, { new: true, upsert: true });

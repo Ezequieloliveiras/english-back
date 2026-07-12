@@ -1,4 +1,5 @@
 import { DailyPlanRepository } from "../repositories/dailyPlan.repository";
+import { learningUnits } from "../data/learningRoadmap";
 import {
   DailyPlan,
   EnglishLevel,
@@ -60,7 +61,7 @@ const difficultyBoost: Record<UserProfile["mainDifficulty"], Partial<Record<Stud
   pronunciation: { "speaking-coach": 0.12, shadowing: 0.1, conversation: 0.04, vocabulary: -0.04, review: -0.02 },
 };
 
-const levelBoost: Record<EnglishLevel, Partial<Record<StudyBlockType, number>>> = {
+const levelBoost: Partial<Record<EnglishLevel, Partial<Record<StudyBlockType, number>>>> = {
   A1: { listening: 0.07, vocabulary: 0.05, conversation: -0.05 },
   A2: { shadowing: 0.04, "speaking-coach": 0.03, conversation: 0.03 },
   B1: { conversation: 0.07, review: 0.02, listening: -0.03 },
@@ -70,7 +71,11 @@ const levelBoost: Record<EnglishLevel, Partial<Record<StudyBlockType, number>>> 
 
 const normalizeLevel = (level: string): EnglishLevel => {
   const value = level.toUpperCase();
-  return ["A1", "A2", "B1", "B2", "C1"].includes(value) ? (value as EnglishLevel) : "A1";
+  if (["A1.1", "A1.2", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2"].includes(value)) {
+    return value as EnglishLevel;
+  }
+
+  return ["A1", "A2", "B1", "B2", "C1"].includes(value) ? (value as EnglishLevel) : "A1.1";
 };
 
 const normalizeDifficulty = (difficulty: string): UserProfile["mainDifficulty"] => {
@@ -112,6 +117,20 @@ const buildFocus = (profile: UserProfile) => {
   };
 
   return `${focusByDifficulty[profile.mainDifficulty]} Goal: ${profile.primaryGoal}`;
+};
+
+const levelBand = (level: EnglishLevel) => level.slice(0, 2);
+
+const selectLearningUnit = (level: EnglishLevel, rotation: number) => {
+  const exact = learningUnits.filter((unit) => unit.level === level && unit.status === "published");
+  const byBand = learningUnits.filter((unit) => unit.level.startsWith(levelBand(level)) && unit.status === "published");
+  const available = exact.length ? exact : byBand.length ? byBand : learningUnits.filter((unit) => unit.status === "published");
+
+  if (!available.length) {
+    return null;
+  }
+
+  return available[Math.abs(rotation) % available.length];
 };
 
 const distributeMinutes = (totalMinutes: number, weights: Record<StudyBlockType, number>) => {
@@ -173,10 +192,11 @@ export class DailyPlanService {
   generatePlan(profile: UserProfile, date = todayKey(), rotation = 0): Omit<DailyPlan, "id"> {
     const level = normalizeLevel(profile.currentLevel);
     const difficulty = normalizeDifficulty(profile.mainDifficulty);
+    const learningUnit = selectLearningUnit(level, rotation);
     let weights = { ...baseWeights };
 
     weights = applyBoost(weights, difficultyBoost[difficulty]);
-    weights = applyBoost(weights, levelBoost[level]);
+    weights = applyBoost(weights, levelBoost[level] ?? levelBoost[levelBand(level) as EnglishLevel] ?? {});
     weights = applyBoost(weights, goalBoost(profile.primaryGoal));
 
     const allocations = distributeMinutes(profile.dailyMinutes, weights);
@@ -195,10 +215,16 @@ export class DailyPlanService {
 
     return {
       userId: profile.id,
-      focus: buildFocus({ ...profile, currentLevel: level, mainDifficulty: difficulty }),
+      focus: learningUnit
+        ? `${learningUnit.title}: ${learningUnit.scenario}`
+        : buildFocus({ ...profile, currentLevel: level, mainDifficulty: difficulty }),
       totalMinutes: blocks.reduce((sum, block) => sum + block.durationMinutes, 0),
       streak: 0,
       date,
+      learningUnitId: learningUnit?.id,
+      scenario: learningUnit?.scenario,
+      targetCompetencies: learningUnit?.competencies ?? [],
+      targetChunks: learningUnit?.vocabularyChunks ?? [],
       blocks,
     };
   }

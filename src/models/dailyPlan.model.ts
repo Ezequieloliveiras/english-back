@@ -20,6 +20,10 @@ const dailyPlanSchema = new Schema(
     totalMinutes: { type: Number, required: true },
     streak: { type: Number, required: true },
     date: { type: String, required: true },
+    learningUnitId: { type: String },
+    scenario: { type: String },
+    targetCompetencies: { type: [String], required: true, default: [] },
+    targetChunks: { type: [String], required: true, default: [] },
     blocks: { type: [studyBlockSchema], required: true },
   },
   { timestamps: true }

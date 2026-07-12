@@ -10,6 +10,7 @@ import { AuthController } from "./controllers/auth.controller";
 import { ContentController } from "./controllers/content.controller";
 import { ConversationController } from "./controllers/conversation.controller";
 import { DailyPlanController } from "./controllers/dailyPlan.controller";
+import { LearningController } from "./controllers/learning.controller";
 import { OnboardingController } from "./controllers/onboarding.controller";
 import { PracticeController } from "./controllers/practice.controller";
 import { ReviewController } from "./controllers/review.controller";
@@ -28,6 +29,7 @@ import { AuthService } from "./services/auth.service";
 import { ContentService } from "./services/content.service";
 import { ConversationService } from "./services/conversation.service";
 import { DailyPlanService } from "./services/dailyPlan.service";
+import { LearningService } from "./services/learning.service";
 import { OpenAiService } from "./services/openai.service";
 import { OnboardingService } from "./services/onboarding.service";
 import { PracticeService } from "./services/practice.service";
@@ -48,6 +50,7 @@ const settingsService = new SettingsService(settingsRepository);
 const openAiService = new OpenAiService(aiRepository, settingsRepository);
 const conversationService = new ConversationService(openAiService);
 const dailyPlanService = new DailyPlanService(dailyPlanRepository);
+const learningService = new LearningService();
 const reviewService = new ReviewService(contentRepository, dailyPlanService);
 const contentService = new ContentService(
   contentRepository,
@@ -56,7 +59,7 @@ const contentService = new ContentService(
   aiRepository
 );
 const onboardingService = new OnboardingService(dailyPlanService);
-const practiceService = new PracticeService(practiceRepository);
+const practiceService = new PracticeService(practiceRepository, learningService);
 
 const contentController = new ContentController(contentService);
 const audioController = new AudioController(audioService);
@@ -65,6 +68,7 @@ const conversationController = new ConversationController(conversationService);
 const reviewController = new ReviewController(reviewService);
 const onboardingController = new OnboardingController(onboardingService);
 const dailyPlanController = new DailyPlanController(dailyPlanService);
+const learningController = new LearningController(learningService);
 const aiController = new AiController(openAiService);
 const practiceController = new PracticeController(practiceService);
 const settingsController = new SettingsController(settingsService);
@@ -118,6 +122,7 @@ app.use(
     reviewController,
     onboardingController,
     dailyPlanController,
+    learningController,
     aiController,
     practiceController,
     settingsController

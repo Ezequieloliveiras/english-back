@@ -2,8 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PracticeService = void 0;
 class PracticeService {
-    constructor(practiceRepository) {
+    constructor(practiceRepository, learningService) {
         this.practiceRepository = practiceRepository;
+        this.learningService = learningService;
     }
     async completeActivity(input) {
         if (!input.type || !input.itemId || !input.title) {
@@ -36,6 +37,17 @@ class PracticeService {
             exerciseId: input.exerciseId,
             expectedText: input.expectedText,
             selectedMeaning: input.selectedMeaning,
+            comprehensionCorrect: Boolean(input.comprehensionCorrect),
+            translationOpened: Boolean(input.translationOpened),
+            transcriptOpened: Boolean(input.transcriptOpened),
+            slowAudioUsed: Boolean(input.slowAudioUsed),
+            replayCount: Math.max(0, Number(input.replayCount ?? 0)),
+            unknownWords: Array.isArray(input.unknownWords) ? input.unknownWords : [],
+        });
+        await this.learningService?.recordListeningAttemptEvidence({
+            userId: input.userId,
+            exerciseId: input.exerciseId,
+            competencyIds: input.competencyIds,
             comprehensionCorrect: Boolean(input.comprehensionCorrect),
             translationOpened: Boolean(input.translationOpened),
             transcriptOpened: Boolean(input.transcriptOpened),

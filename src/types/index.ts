@@ -1,4 +1,178 @@
-export type EnglishLevel = "A1" | "A2" | "B1" | "B2" | "C1";
+export type CEFRLevel =
+  | "A1.1"
+  | "A1.2"
+  | "A2.1"
+  | "A2.2"
+  | "B1.1"
+  | "B1.2"
+  | "B2.1"
+  | "B2.2";
+
+export type EnglishLevel = "A1" | "A2" | "B1" | "B2" | "C1" | CEFRLevel;
+
+export type CompetencyCategory =
+  | "listening"
+  | "speaking"
+  | "pronunciation"
+  | "vocabulary"
+  | "interaction"
+  | "fluency"
+  | "reading"
+  | "writing"
+  | "thinking_in_english";
+
+export interface CEFRLevelDefinition {
+  code: CEFRLevel;
+  title: string;
+  description: string;
+  sequence: number;
+  objectives: string[];
+  requiredCompetencies: string[];
+  completionCriteria: string[];
+  isActive: boolean;
+  pedagogy: {
+    cefrBand: "A1" | "A2" | "B1" | "B2";
+    estimatedHours: string;
+    grammarFocus: string[];
+    vocabularyTarget: string;
+    realWorldSituations: string[];
+  };
+}
+
+export interface Competency {
+  id: string;
+  code: string;
+  level: CEFRLevel;
+  title: string;
+  description: string;
+  category: CompetencyCategory;
+  canDoStatement: string;
+  requiredScore: number;
+  requiredRetentionScore: number;
+  requiredAttempts: number;
+  prerequisites: string[];
+  tags: string[];
+}
+
+export interface LearningUnit {
+  id: string;
+  level: CEFRLevel;
+  title: string;
+  description: string;
+  scenario: string;
+  competencies: string[];
+  grammarFocus: string[];
+  vocabularyChunks: string[];
+  listeningContentIds: string[];
+  pronunciationContentIds: string[];
+  speakingContentIds: string[];
+  thinkingContentIds: string[];
+  reviewContentIds: string[];
+  estimatedMinutes: number;
+  order: number;
+  status: "draft" | "published" | "archived";
+}
+
+export interface CompetencyEvidence {
+  type:
+    | "listening_attempt"
+    | "speaking_attempt"
+    | "pronunciation_analysis"
+    | "vocabulary_recall"
+    | "conversation_task"
+    | "checkpoint"
+    | "retention_review"
+    | "practice_completion";
+  score: number;
+  createdAt: string;
+  sourceId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CompetencyProgress {
+  userId: string;
+  competencyId: string;
+  masteryScore: number;
+  retentionScore: number;
+  confidenceScore: number;
+  attempts: number;
+  successfulAttempts: number;
+  lastPracticedAt: string | null;
+  lastAssessedAt: string | null;
+  masteredAt: string | null;
+  status: "locked" | "learning" | "reviewing" | "mastered";
+  evidence: CompetencyEvidence[];
+}
+
+export interface UserLevelProgress {
+  userId: string;
+  currentLevel: CEFRLevel;
+  targetLevel: CEFRLevel;
+  levelProgress: number;
+  competenciesMastered: number;
+  competenciesRequired: number;
+  checkpointStatus: "locked" | "available" | "in_progress" | "passed" | "failed";
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface CompetencyProfile {
+  userId: string;
+  listening: number;
+  speaking: number;
+  pronunciation: number;
+  vocabulary: number;
+  interaction: number;
+  fluency: number;
+  retention: number;
+  thinkingInEnglish: number;
+  updatedAt: string;
+}
+
+export interface DailyExercise {
+  id: string;
+  type: StudyBlockType;
+  title: string;
+  estimatedMinutes: number;
+  competencyIds: string[];
+  contentIds: string[];
+}
+
+export interface DailyLearningContext {
+  userId: string;
+  date: string;
+  learningUnitId: string;
+  targetCompetencies: string[];
+  targetChunks: string[];
+  scenario: string;
+  exercises: DailyExercise[];
+  totalEstimatedMinutes: number;
+  completedMinutes: number;
+  completionPercentage: number;
+}
+
+export interface CheckpointDefinition {
+  id: string;
+  level: CEFRLevel;
+  title: string;
+  description: string;
+  requiredCompetencies: string[];
+  tasks: string[];
+  minimumScores: {
+    listening: number;
+    speaking: number;
+    vocabulary: number;
+    retention: number;
+    checkpoint: number;
+  };
+}
+
+export interface LearningRoadmapPayload {
+  levels: CEFRLevelDefinition[];
+  competencies: Competency[];
+  units: LearningUnit[];
+  checkpoints: CheckpointDefinition[];
+}
 
 export type StudyBlockType =
   | "shadowing"
@@ -27,6 +201,10 @@ export interface DailyPlan {
   totalMinutes: number;
   streak: number;
   date: string;
+  learningUnitId?: string;
+  scenario?: string;
+  targetCompetencies?: string[];
+  targetChunks?: string[];
   blocks: StudyBlock[];
 }
 

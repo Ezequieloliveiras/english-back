@@ -1,7 +1,11 @@
 import { PracticeRepository } from "../repositories/practice.repository";
+import { LearningService } from "./learning.service";
 
 export class PracticeService {
-  constructor(private readonly practiceRepository: PracticeRepository) {}
+  constructor(
+    private readonly practiceRepository: PracticeRepository,
+    private readonly learningService?: LearningService
+  ) {}
 
   async completeActivity(input: {
     userId: string;
@@ -44,6 +48,7 @@ export class PracticeService {
     slowAudioUsed?: boolean;
     replayCount?: number;
     unknownWords?: string[];
+    competencyIds?: string[];
   }) {
     if (!input.exerciseId || !input.expectedText) {
       return { status: 400, body: { message: "exerciseId and expectedText are required" } };
@@ -54,6 +59,18 @@ export class PracticeService {
       exerciseId: input.exerciseId,
       expectedText: input.expectedText,
       selectedMeaning: input.selectedMeaning,
+      comprehensionCorrect: Boolean(input.comprehensionCorrect),
+      translationOpened: Boolean(input.translationOpened),
+      transcriptOpened: Boolean(input.transcriptOpened),
+      slowAudioUsed: Boolean(input.slowAudioUsed),
+      replayCount: Math.max(0, Number(input.replayCount ?? 0)),
+      unknownWords: Array.isArray(input.unknownWords) ? input.unknownWords : [],
+    });
+
+    await this.learningService?.recordListeningAttemptEvidence({
+      userId: input.userId,
+      exerciseId: input.exerciseId,
+      competencyIds: input.competencyIds,
       comprehensionCorrect: Boolean(input.comprehensionCorrect),
       translationOpened: Boolean(input.translationOpened),
       transcriptOpened: Boolean(input.transcriptOpened),

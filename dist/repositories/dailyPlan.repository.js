@@ -57,6 +57,7 @@ const mapUser = (user) => ({
     profession: user.profession,
     primaryGoal: user.primaryGoal,
     mainDifficulty: user.mainDifficulty,
+    initialSetupCompleted: Boolean(user.initialSetupCompleted),
 });
 const mapProgress = (progress) => ({
     level: progress.level,
@@ -122,6 +123,9 @@ class DailyPlanRepository {
                 ...(profile.profession ? { profession: profile.profession } : {}),
                 ...(profile.primaryGoal ? { primaryGoal: profile.primaryGoal } : {}),
                 ...(profile.mainDifficulty ? { mainDifficulty: profile.mainDifficulty } : {}),
+                ...(profile.initialSetupCompleted !== undefined
+                    ? { initialSetupCompleted: profile.initialSetupCompleted }
+                    : {}),
             },
         }, { new: true });
         return updated ? mapUser(updated) : null;

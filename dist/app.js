@@ -72,12 +72,44 @@ const aiController = new ai_controller_1.AiController(openAiService, dailyPlanSe
 const practiceController = new practice_controller_1.PracticeController(practiceService);
 const settingsController = new settings_controller_1.SettingsController(settingsService);
 exports.app = (0, express_1.default)();
-exports.app.use((0, helmet_1.default)());
-exports.app.use((0, cors_1.default)({
-    origin: env_1.env.corsOrigin,
+const allowedOrigins = env_1.env.corsOrigin.map((origin) => origin.trim().replace(/\/$/, ""));
+const corsOptions = {
+    origin(origin, callback) {
+        // Postman, curl e comunicações servidor-servidor podem não enviar Origin.
+        if (!origin) {
+            return callback(null, true);
+        }
+        const normalizedOrigin = origin.trim().replace(/\/$/, "");
+        const isAllowed = allowedOrigins.includes(normalizedOrigin);
+        console.log("CORS:", {
+            receivedOrigin: normalizedOrigin,
+            allowedOrigins,
+            isAllowed,
+        });
+        if (isAllowed) {
+            return callback(null, true);
+        }
+        return callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
+    },
     credentials: true,
-    exposedHeaders: ["X-Audio-Cache", "X-Audio-Cacheable", "X-Audio-Expires-At", "X-Audio-Cache-Key"],
-}));
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+    ],
+    exposedHeaders: [
+        "X-Audio-Cache",
+        "X-Audio-Cacheable",
+        "X-Audio-Expires-At",
+        "X-Audio-Cache-Key",
+    ],
+    optionsSuccessStatus: 204,
+};
+exports.app.use((0, helmet_1.default)());
+exports.app.use((0, cors_1.default)(corsOptions));
 exports.app.use((0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
     limit: 300,
@@ -86,13 +118,12 @@ exports.app.use((0, express_rate_limit_1.default)({
 }));
 exports.app.use((0, cookie_parser_1.default)());
 exports.app.use(express_1.default.json({ limit: "15mb" }));
-exports.app.use((0, cookie_parser_1.default)());
-exports.app.use(express_1.default.json());
 exports.app.use((req, res, next) => {
     const start = Date.now();
     console.log("────────────────────────────────────────");
     console.log(`[${new Date().toISOString()}]`);
     console.log(`${req.method} ${req.originalUrl}`);
+    console.log("Origin:", req.headers.origin ?? "sem origin");
     res.on("finish", () => {
         console.log(`→ ${res.statusCode} (${Date.now() - start}ms)`);
         console.log("────────────────────────────────────────");

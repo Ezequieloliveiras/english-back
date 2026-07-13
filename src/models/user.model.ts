@@ -10,6 +10,7 @@ const userSchema = new Schema(
     profession: { type: String, required: true },
     primaryGoal: { type: String, required: true },
     mainDifficulty: { type: String, required: true },
+    initialSetupCompleted: { type: Boolean, required: true, default: false },
   },
   { timestamps: true }
 );

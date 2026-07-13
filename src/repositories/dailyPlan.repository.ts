@@ -57,6 +57,7 @@ const mapUser = (user: any): UserProfile => ({
   profession: user.profession,
   primaryGoal: user.primaryGoal,
   mainDifficulty: user.mainDifficulty,
+  initialSetupCompleted: Boolean(user.initialSetupCompleted),
 });
 
 const mapProgress = (progress: any): ProgressSnapshot => ({
@@ -137,6 +138,9 @@ export class DailyPlanRepository {
           ...(profile.profession ? { profession: profile.profession } : {}),
           ...(profile.primaryGoal ? { primaryGoal: profile.primaryGoal } : {}),
           ...(profile.mainDifficulty ? { mainDifficulty: profile.mainDifficulty } : {}),
+          ...(profile.initialSetupCompleted !== undefined
+            ? { initialSetupCompleted: profile.initialSetupCompleted }
+            : {}),
         },
       },
       { new: true }

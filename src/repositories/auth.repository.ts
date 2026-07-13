@@ -12,6 +12,7 @@ const mapUser = (user: any): UserProfile => ({
   profession: user.profession,
   primaryGoal: user.primaryGoal,
   mainDifficulty: user.mainDifficulty,
+  initialSetupCompleted: Boolean(user.initialSetupCompleted),
 });
 
 export class AuthRepository {
@@ -38,6 +39,7 @@ export class AuthRepository {
       profession: "Not defined",
       primaryGoal: "Speak English with confidence",
       mainDifficulty: "speaking",
+      initialSetupCompleted: false,
     });
 
     return mapUser(user);

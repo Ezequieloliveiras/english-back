@@ -261,6 +261,7 @@ export interface UserProfile {
   profession: string;
   primaryGoal: string;
   mainDifficulty: "listening" | "speaking" | "vocabulary" | "pronunciation";
+  initialSetupCompleted: boolean;
 }
 
 export interface UserSettings {

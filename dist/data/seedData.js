@@ -350,6 +350,7 @@ exports.dashboardSeed = {
         profession: "Full Stack Developer",
         primaryGoal: "Speak naturally in meetings and technical conversations",
         mainDifficulty: "speaking",
+        initialSetupCompleted: true,
     },
     settings: {
         userId: "seed-user-template",

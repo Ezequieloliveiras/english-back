@@ -14,6 +14,7 @@ const buildProfile = (dailyMinutes: number): UserProfile => ({
   profession: "Developer",
   primaryGoal: "Speak English with confidence",
   mainDifficulty: "speaking",
+  initialSetupCompleted: true,
 });
 
 const buildProgress = (): ProgressSnapshot => ({

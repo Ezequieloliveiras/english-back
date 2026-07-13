@@ -31,6 +31,7 @@ export class OnboardingService {
       profession: input.profession,
       primaryGoal: input.objective,
       mainDifficulty: input.difficulty,
+      initialSetupCompleted: true,
     };
     const { dailyPlan, progress, user } = await this.dailyPlanService.createPlanForProfile(userId, profile);
 
@@ -44,6 +45,7 @@ export class OnboardingService {
         profession: user.profession,
         primaryGoal: user.primaryGoal,
         mainDifficulty: user.mainDifficulty,
+        initialSetupCompleted: user.initialSetupCompleted,
       },
       suggestedPlan: {
         ...dailyPlan,

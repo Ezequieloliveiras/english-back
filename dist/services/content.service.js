@@ -2,20 +2,22 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContentService = void 0;
 class ContentService {
-    constructor(contentRepository, dailyPlanService, settingsRepository, aiRepository) {
+    constructor(contentRepository, dailyPlanService, settingsRepository, aiRepository, practiceRepository) {
         this.contentRepository = contentRepository;
         this.dailyPlanService = dailyPlanService;
         this.settingsRepository = settingsRepository;
         this.aiRepository = aiRepository;
+        this.practiceRepository = practiceRepository;
     }
     async getBootstrap(userId) {
         const { user, dailyPlan, progress } = await this.dailyPlanService.createOrGetTodayPlan(userId);
-        const [content, settings, realProgressStats, recentSpeakingAttempts, reviewQueue,] = await Promise.all([
+        const [content, settings, realProgressStats, recentSpeakingAttempts, reviewQueue, completionState,] = await Promise.all([
             this.contentRepository.getLearningContent(userId),
             this.settingsRepository.findOrCreate(userId),
             this.aiRepository.getProgressStats(userId),
             this.aiRepository.getRecentSpeakingAttempts(userId),
             this.contentRepository.getDueReviewItems(userId),
+            this.practiceRepository.getUserCompletionState(userId),
         ]);
         const personalizedContent = this.contentRepository.personalizeForPlan(content, user, dailyPlan);
         return {
@@ -25,6 +27,8 @@ class ContentService {
             progress,
             realProgressStats,
             recentSpeakingAttempts,
+            completedActivities: completionState.completedActivities,
+            listeningAttempts: completionState.listeningAttempts,
             reviewQueue,
             goal: {
                 id: `goal-${user.id}`,

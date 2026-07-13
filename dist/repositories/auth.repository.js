@@ -3,17 +3,24 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthRepository = void 0;
 const user_model_1 = require("../models/user.model");
 const toPlainId = (value) => String(value ?? "");
+const cleanInitialSetupValue = (value, fallback, initialSetupCompleted) => {
+    if (initialSetupCompleted) {
+        return value;
+    }
+    const normalized = value.trim().toLowerCase();
+    return normalized === fallback ? "" : value;
+};
 const mapUser = (user) => ({
     id: toPlainId(user._id ?? user.id),
     name: user.name,
     email: user.email,
     currentLevel: user.currentLevel,
     dailyMinutes: user.dailyMinutes,
-    profession: user.profession,
+    profession: cleanInitialSetupValue(user.profession, "not defined", Boolean(user.initialSetupCompleted)),
     professionalFocusMode: user.professionalFocusMode ?? "standard",
     professionValidationStatus: user.professionValidationStatus ?? "unchecked",
     professionValidationMessage: user.professionValidationMessage ?? "",
-    primaryGoal: user.primaryGoal,
+    primaryGoal: cleanInitialSetupValue(user.primaryGoal, "speak english with confidence", Boolean(user.initialSetupCompleted)),
     mainDifficulty: user.mainDifficulty,
     initialSetupCompleted: Boolean(user.initialSetupCompleted),
 });

@@ -8,6 +8,15 @@ const isDatabaseReady = () => mongoose.connection.readyState === 1;
 
 const toPlainId = (value: unknown) => String(value ?? "");
 
+const cleanInitialSetupValue = (value: string, fallback: string, initialSetupCompleted: boolean) => {
+  if (initialSetupCompleted) {
+    return value;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === fallback ? "" : value;
+};
+
 const mapBlock = (block: any): StudyBlock => ({
   id: block.id,
   title: block.title,
@@ -54,11 +63,11 @@ const mapUser = (user: any): UserProfile => ({
   email: user.email,
   currentLevel: user.currentLevel,
   dailyMinutes: user.dailyMinutes,
-  profession: user.profession,
+  profession: cleanInitialSetupValue(user.profession, "not defined", Boolean(user.initialSetupCompleted)),
   professionalFocusMode: user.professionalFocusMode ?? "standard",
   professionValidationStatus: user.professionValidationStatus ?? "unchecked",
   professionValidationMessage: user.professionValidationMessage ?? "",
-  primaryGoal: user.primaryGoal,
+  primaryGoal: cleanInitialSetupValue(user.primaryGoal, "speak english with confidence", Boolean(user.initialSetupCompleted)),
   mainDifficulty: user.mainDifficulty,
   initialSetupCompleted: Boolean(user.initialSetupCompleted),
 });

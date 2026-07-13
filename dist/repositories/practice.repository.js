@@ -3,7 +3,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PracticeRepository = void 0;
 const listeningAttempt_model_1 = require("../models/listeningAttempt.model");
 const practiceActivity_model_1 = require("../models/practiceActivity.model");
+const toPlainId = (value) => String(value ?? "");
 class PracticeRepository {
+    async getUserCompletionState(userId) {
+        const [activities, listeningAttempts] = await Promise.all([
+            practiceActivity_model_1.PracticeActivityModel.find({ userId, status: "completed" }).select("type itemId title completedAt"),
+            listeningAttempt_model_1.ListeningAttemptModel.find({ userId }).select("exerciseId completedAt"),
+        ]);
+        return {
+            completedActivities: activities.map((activity) => ({
+                id: toPlainId(activity._id),
+                type: activity.type,
+                itemId: activity.itemId,
+                title: activity.title,
+                completedAt: activity.completedAt?.toISOString?.() ?? String(activity.completedAt),
+            })),
+            listeningAttempts: listeningAttempts.map((attempt) => ({
+                id: toPlainId(attempt._id),
+                exerciseId: attempt.exerciseId,
+                completedAt: attempt.completedAt?.toISOString?.() ?? String(attempt.completedAt),
+            })),
+        };
+    }
     async completeActivity(input) {
         const query = { userId: input.userId, type: input.type, itemId: input.itemId };
         const existing = await practiceActivity_model_1.PracticeActivityModel.findOne(query);

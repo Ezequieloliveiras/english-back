@@ -1,5 +1,6 @@
 import { ContentRepository } from "../repositories/content.repository";
 import { AiRepository } from "../repositories/ai.repository";
+import { PracticeRepository } from "../repositories/practice.repository";
 import { SettingsRepository } from "../repositories/settings.repository";
 import { DailyPlanService } from "./dailyPlan.service";
 
@@ -8,7 +9,8 @@ export class ContentService {
     private readonly contentRepository: ContentRepository,
     private readonly dailyPlanService: DailyPlanService,
     private readonly settingsRepository: SettingsRepository,
-    private readonly aiRepository: AiRepository
+    private readonly aiRepository: AiRepository,
+    private readonly practiceRepository: PracticeRepository
   ) {}
 
   async getBootstrap(userId: string) {
@@ -19,12 +21,14 @@ export class ContentService {
       realProgressStats,
       recentSpeakingAttempts,
       reviewQueue,
+      completionState,
     ] = await Promise.all([
       this.contentRepository.getLearningContent(userId),
       this.settingsRepository.findOrCreate(userId),
       this.aiRepository.getProgressStats(userId),
       this.aiRepository.getRecentSpeakingAttempts(userId),
       this.contentRepository.getDueReviewItems(userId),
+      this.practiceRepository.getUserCompletionState(userId),
     ]);
     const personalizedContent = this.contentRepository.personalizeForPlan(content, user, dailyPlan);
 
@@ -35,6 +39,8 @@ export class ContentService {
       progress,
       realProgressStats,
       recentSpeakingAttempts,
+      completedActivities: completionState.completedActivities,
+      listeningAttempts: completionState.listeningAttempts,
       reviewQueue,
       goal: {
         id: `goal-${user.id}`,

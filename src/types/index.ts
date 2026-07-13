@@ -450,6 +450,18 @@ export interface DashboardPayload {
   progress: ProgressSnapshot;
   realProgressStats: UserProgressStats;
   recentSpeakingAttempts: RecentSpeakingAttempt[];
+  completedActivities: Array<{
+    id: string;
+    type: string;
+    itemId: string;
+    title: string;
+    completedAt: string;
+  }>;
+  listeningAttempts: Array<{
+    id: string;
+    exerciseId: string;
+    completedAt: string;
+  }>;
   dailyPlan: DailyPlan;
   vocabulary: VocabularyItem[];
   reviewQueue: VocabularyItem[];

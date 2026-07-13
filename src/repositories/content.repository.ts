@@ -69,6 +69,87 @@ const getPlanRotation = (dailyPlan: DailyPlan) => {
 
 const safeText = (value: string, fallback: string) => value.trim().replace(/\s+/g, " ") || fallback;
 
+const normalizeGoalText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const looksPortuguese = (value: string) => {
+  const normalized = normalizeGoalText(value);
+
+  return /\b(falar|fala|reuniao|reunioes|entrevista|entrevistas|trabalho|ingles|melhor|melhorar|praticar|viagem|viajar|atendimento|vendas|negocios|conversa|conversacao|pronuncia|escuta|ouvir)\b/.test(
+    normalized
+  );
+};
+
+const goalIncludes = (normalized: string, terms: string[]) => terms.some((term) => normalized.includes(term));
+
+const buildGoalContext = (goal: string) => {
+  const original = safeText(goal, "falar com mais confiança");
+  const normalized = normalizeGoalText(original);
+  const englishParts: string[] = [];
+  const portugueseParts: string[] = [];
+
+  if (goalIncludes(normalized, ["reuniao", "reunioes", "meeting", "meetings"])) {
+    englishParts.push("meetings");
+    portugueseParts.push("reuniões");
+  }
+
+  if (goalIncludes(normalized, ["entrevista", "entrevistas", "interview", "interviews"])) {
+    englishParts.push("interviews");
+    portugueseParts.push("entrevistas");
+  }
+
+  if (goalIncludes(normalized, ["apresentacao", "apresentacoes", "presentation", "presentations"])) {
+    englishParts.push("presentations");
+    portugueseParts.push("apresentações");
+  }
+
+  if (goalIncludes(normalized, ["conversa", "conversacao", "conversation", "conversations"])) {
+    englishParts.push("conversations");
+    portugueseParts.push("conversas");
+  }
+
+  if (goalIncludes(normalized, ["trabalho", "profissional", "work", "professional"])) {
+    englishParts.push("work situations");
+    portugueseParts.push("situações de trabalho");
+  }
+
+  if (goalIncludes(normalized, ["viagem", "viajar", "travel", "trip"])) {
+    englishParts.push("travel situations");
+    portugueseParts.push("situações de viagem");
+  }
+
+  if (goalIncludes(normalized, ["vendas", "sales"])) {
+    englishParts.push("sales conversations");
+    portugueseParts.push("conversas de vendas");
+  }
+
+  const englishPurpose = englishParts.length
+    ? englishParts.length === 1
+      ? englishParts[0]
+      : `${englishParts.slice(0, -1).join(", ")} and ${englishParts[englishParts.length - 1]}`
+    : looksPortuguese(original)
+      ? "my current speaking goal"
+      : original;
+  const portuguesePurpose = portugueseParts.length
+    ? portugueseParts.length === 1
+      ? portugueseParts[0]
+      : `${portugueseParts.slice(0, -1).join(", ")} e ${portugueseParts[portugueseParts.length - 1]}`
+    : original;
+
+  return {
+    englishPurpose,
+    portuguesePurpose,
+    englishGoalSentence: `I want to practice English for ${englishPurpose}.`,
+    portugueseGoalSentence: `Eu quero praticar inglês para ${portuguesePurpose}.`,
+  };
+};
+
 const normalizeProfessionText = (value: string) =>
   value
     .toLowerCase()
@@ -79,6 +160,7 @@ const normalizeProfessionText = (value: string) =>
 
 const professionalProfile = (user: UserProfile) => {
   const profession = safeText(user.profession, "work");
+  const goalContext = buildGoalContext(user.primaryGoal);
 
   if (user.professionalFocusMode !== "profession") {
     return {
@@ -89,7 +171,7 @@ const professionalProfile = (user: UserProfile) => {
       terms: ["priority", "deadline", "next step"],
       phrases: [
         "I can explain the next step in simple English.",
-        `My goal today is to practice: ${safeText(user.primaryGoal, "speak with more confidence")}.`,
+        `My goal today is to practice ${goalContext.englishPurpose}.`,
       ],
     };
   }
@@ -181,8 +263,7 @@ const professionalProfile = (user: UserProfile) => {
 
 const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
   const rotation = getPlanRotation(dailyPlan);
-  const profession = safeText(user.profession, "your work");
-  const goal = safeText(user.primaryGoal, "speak with more confidence");
+  const goal = buildGoalContext(user.primaryGoal);
   const profile = professionalProfile(user);
   const scenarios: PlanScenario[] = [
     {
@@ -190,18 +271,18 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
       situation: profile.scenario,
       dialogue: [
         "Manager: What is your main focus for this session?",
-        `Student: I want to practice English for ${goal}.`,
+        `Student: ${goal.englishGoalSentence}`,
         "Manager: Good. What is one small task you can finish now?",
         `Student: ${profile.phrases[0]}`,
       ],
       translations: [
         "Qual é o seu foco principal nesta sessão?",
-        `Eu quero praticar inglês para ${goal}.`,
+        goal.portugueseGoalSentence,
         "Certo. Qual é uma pequena tarefa que você consegue terminar agora?",
         `Eu consigo dizer: ${profile.phrases[0]}`,
       ],
       questions: [
-        { prompt: "What does the student want to practice?", answer: goal },
+        { prompt: "What does the student want to practice?", answer: goal.englishPurpose },
         { prompt: "What can the student explain?", answer: "The next step in simple English." },
       ],
     },
@@ -286,6 +367,50 @@ const chunkByPhrase = (text: string, translation: string) => {
   ];
 };
 
+const translateGeneratedPhrase = (phrase: string, area: string) => {
+  const translations: Record<string, string> = {
+    "I can explain the next step in simple English.": "Eu consigo explicar o próximo passo em inglês simples.",
+    "The campaign needs a clearer message for this audience.":
+      "A campanha precisa de uma mensagem mais clara para esse público.",
+    "I will compare the conversion rate before changing the content.":
+      "Vou comparar a taxa de conversão antes de mudar o conteúdo.",
+    "I need to understand the customer's main objection.":
+      "Eu preciso entender a principal objeção do cliente.",
+    "I will send a clear follow-up with the next step.":
+      "Vou enviar um follow-up claro com o próximo passo.",
+    "I need more context before I escalate this ticket.":
+      "Eu preciso de mais contexto antes de escalar esse ticket.",
+    "I will explain the solution clearly to the customer.":
+      "Vou explicar a solução com clareza para o cliente.",
+    "I can explain the issue and suggest a solution.":
+      "Eu consigo explicar o problema e sugerir uma solução.",
+    "I need to check the API response before I continue.":
+      "Eu preciso verificar a resposta da API antes de continuar.",
+    "The layout should make the main action clearer.":
+      "O layout deve deixar a ação principal mais clara.",
+    "I will update the prototype after the feedback.":
+      "Vou atualizar o protótipo depois do feedback.",
+  };
+
+  if (translations[phrase]) {
+    return translations[phrase];
+  }
+
+  if (phrase.startsWith("I need to clarify the priority for this")) {
+    return `Eu preciso esclarecer a prioridade desta tarefa de ${area}.`;
+  }
+
+  if (phrase.startsWith("I can explain the result in simple English")) {
+    return `Eu consigo explicar o resultado em inglês simples no contexto de ${area}.`;
+  }
+
+  if (phrase.startsWith("My goal today is to practice")) {
+    return "Meu objetivo hoje é praticar esse foco em inglês.";
+  }
+
+  return `Frase útil para ${area}.`;
+};
+
 const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan): ListeningLesson => {
   const rotation = getPlanRotation(dailyPlan);
   const scenario = buildPlanScenario(user, dailyPlan);
@@ -318,27 +443,29 @@ const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan): List
 
 const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan): ShadowingItem[] => {
   const rotation = getPlanRotation(dailyPlan);
-  const goal = safeText(user.primaryGoal, "speak with more confidence");
-  const profession = safeText(user.profession, "work");
+  const goal = buildGoalContext(user.primaryGoal);
   const profile = professionalProfile(user);
   const sets: ShadowingItem[][] = [
     [
       {
         id: `plan-shadowing-${dailyPlan.date}-${rotation}-1`,
         phrase: profile.phrases[0],
-        naturalTranslation: `Frase útil para ${profile.area}: ${profile.phrases[0]}`,
-        pronunciationHint: "Stress the key professional term and keep the ending clear.",
-        context: `Use this for ${profile.area} updates.`,
-        chunks: chunkByPhrase(profile.phrases[0], `frase de ${profile.area}`),
+        naturalTranslation: translateGeneratedPhrase(profile.phrases[0], profile.area),
+        pronunciationHint: "Destaque o termo profissional principal e mantenha o final claro.",
+        context: `Use em atualizações de ${profile.area}.`,
+        chunks: chunkByPhrase(profile.phrases[0], translateGeneratedPhrase(profile.phrases[0], profile.area)),
       },
       {
         id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
-        phrase: profile.enabled ? profile.phrases[1] : `My goal today is to practice: ${goal}.`,
+        phrase: profile.enabled ? profile.phrases[1] : goal.englishGoalSentence,
         naturalTranslation: profile.enabled
-          ? `Frase útil para ${profile.area}: ${profile.phrases[1]}`
-          : `Meu objetivo hoje é praticar: ${goal}.`,
-        pronunciationHint: "Pause briefly after 'today' and finish with confidence.",
-        chunks: chunkByPhrase(profile.enabled ? profile.phrases[1] : `My goal today is to practice: ${goal}.`, "frase de treino"),
+          ? translateGeneratedPhrase(profile.phrases[1], profile.area)
+          : goal.portugueseGoalSentence,
+        pronunciationHint: "Faça uma pausa breve depois da ideia principal e termine com confiança.",
+        chunks: chunkByPhrase(
+          profile.enabled ? profile.phrases[1] : goal.englishGoalSentence,
+          profile.enabled ? translateGeneratedPhrase(profile.phrases[1], profile.area) : goal.portugueseGoalSentence
+        ),
       },
     ],
     [

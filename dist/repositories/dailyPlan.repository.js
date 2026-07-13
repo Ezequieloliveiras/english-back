@@ -10,6 +10,13 @@ const progress_model_1 = require("../models/progress.model");
 const user_model_1 = require("../models/user.model");
 const isDatabaseReady = () => mongoose_1.default.connection.readyState === 1;
 const toPlainId = (value) => String(value ?? "");
+const cleanInitialSetupValue = (value, fallback, initialSetupCompleted) => {
+    if (initialSetupCompleted) {
+        return value;
+    }
+    const normalized = value.trim().toLowerCase();
+    return normalized === fallback ? "" : value;
+};
 const mapBlock = (block) => ({
     id: block.id,
     title: block.title,
@@ -54,11 +61,11 @@ const mapUser = (user) => ({
     email: user.email,
     currentLevel: user.currentLevel,
     dailyMinutes: user.dailyMinutes,
-    profession: user.profession,
+    profession: cleanInitialSetupValue(user.profession, "not defined", Boolean(user.initialSetupCompleted)),
     professionalFocusMode: user.professionalFocusMode ?? "standard",
     professionValidationStatus: user.professionValidationStatus ?? "unchecked",
     professionValidationMessage: user.professionValidationMessage ?? "",
-    primaryGoal: user.primaryGoal,
+    primaryGoal: cleanInitialSetupValue(user.primaryGoal, "speak english with confidence", Boolean(user.initialSetupCompleted)),
     mainDifficulty: user.mainDifficulty,
     initialSetupCompleted: Boolean(user.initialSetupCompleted),
 });

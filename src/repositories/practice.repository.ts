@@ -1,7 +1,31 @@
 import { ListeningAttemptModel } from "../models/listeningAttempt.model";
 import { PracticeActivityModel } from "../models/practiceActivity.model";
 
+const toPlainId = (value: unknown) => String(value ?? "");
+
 export class PracticeRepository {
+  async getUserCompletionState(userId: string) {
+    const [activities, listeningAttempts] = await Promise.all([
+      PracticeActivityModel.find({ userId, status: "completed" }).select("type itemId title completedAt"),
+      ListeningAttemptModel.find({ userId }).select("exerciseId completedAt"),
+    ]);
+
+    return {
+      completedActivities: activities.map((activity) => ({
+        id: toPlainId(activity._id),
+        type: activity.type,
+        itemId: activity.itemId,
+        title: activity.title,
+        completedAt: activity.completedAt?.toISOString?.() ?? String(activity.completedAt),
+      })),
+      listeningAttempts: listeningAttempts.map((attempt) => ({
+        id: toPlainId(attempt._id),
+        exerciseId: attempt.exerciseId,
+        completedAt: attempt.completedAt?.toISOString?.() ?? String(attempt.completedAt),
+      })),
+    };
+  }
+
   async completeActivity(input: {
     userId: string;
     type: string;

@@ -335,6 +335,12 @@ User preferences:
 - primaryObjective: ${settings.primaryObjective}
 If languageMode is "pt_explanation_en_correction": write pedagogical explanations in clear Brazilian Portuguese, but keep corrections, spoken phrases and examples in English.
 If languageMode is "full_english": write everything in simple A1/A2 English, including titles, subtitles, explanations, strengths, improvements, nextMission and patterns.
+When forcedAlignment has a substitution, make the first feedback item direct and comparative:
+- In Brazilian Portuguese mode, start whatHappened with: Você pronunciou "spokenWord", mas se diz "expectedWord"...
+- Then explain the stress, sound, rhythm or syllable emphasis using the available evidence.
+- Example style: Você pronunciou "douctor", mas se diz "doctor", enfatizando a primeira sílaba: "DOC-tor".
+- Keep spokenWord and expectedWord inside quotes exactly as English words.
+When the issue is a missing word, use: Você deixou de falar "expectedWord"...; when it is an extra word, use: Você adicionou "spokenWord"...
 For Brazilian Portuguese mode, these pedagogical fields must be in Brazilian Portuguese:
 title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence and patterns.exercise.
 Keep only literal quoted English phrases in English, such as "want to", "wanna" and "I wanna talk about my routine.".
@@ -363,6 +369,9 @@ Return valid JSON exactly in this format:
                     transcriptFromAudio: transcript,
                     audioQuality,
                     forcedAlignment: pipeline.alignment,
+                    priorityCorrection: pipeline.alignment.find((item) => item.status === "substitution") ??
+                        pipeline.alignment.find((item) => item.status === "missing") ??
+                        pipeline.alignment.find((item) => item.status === "extra"),
                     phonemeAnalysis: pipeline.phonemeAnalysis,
                     rhythmAnalysis: pipeline.rhythmAnalysis,
                     analysisEngine: pipeline.analysisEngine,

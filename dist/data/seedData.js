@@ -396,6 +396,8 @@ exports.dashboardSeed = {
         weeklySpeaking: [],
     },
     recentSpeakingAttempts: [],
+    completedActivities: [],
+    listeningAttempts: [],
     dailyPlan: {
         id: "plan-1",
         userId: "seed-user-template",

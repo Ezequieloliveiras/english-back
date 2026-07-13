@@ -60,7 +60,8 @@ const contentService = new ContentService(
   contentRepository,
   dailyPlanService,
   settingsRepository,
-  aiRepository
+  aiRepository,
+  practiceRepository
 );
 
 const onboardingService = new OnboardingService(dailyPlanService);

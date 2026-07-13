@@ -17,6 +17,6 @@ const listeningAttemptSchema = new Schema(
   { timestamps: true }
 );
 
-listeningAttemptSchema.index({ userId: 1, exerciseId: 1, createdAt: -1 });
+listeningAttemptSchema.index({ userId: 1, exerciseId: 1 }, { unique: true });
 
 export const ListeningAttemptModel = model("ListeningAttempt", listeningAttemptSchema);

@@ -15,5 +15,5 @@ const listeningAttemptSchema = new mongoose_1.Schema({
     unknownWords: { type: [String], required: true, default: [] },
     completedAt: { type: Date, required: true, default: Date.now },
 }, { timestamps: true });
-listeningAttemptSchema.index({ userId: 1, exerciseId: 1, createdAt: -1 });
+listeningAttemptSchema.index({ userId: 1, exerciseId: 1 }, { unique: true });
 exports.ListeningAttemptModel = (0, mongoose_1.model)("ListeningAttempt", listeningAttemptSchema);

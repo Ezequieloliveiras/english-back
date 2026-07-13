@@ -55,6 +55,9 @@ const mapUser = (user) => ({
     currentLevel: user.currentLevel,
     dailyMinutes: user.dailyMinutes,
     profession: user.profession,
+    professionalFocusMode: user.professionalFocusMode ?? "standard",
+    professionValidationStatus: user.professionValidationStatus ?? "unchecked",
+    professionValidationMessage: user.professionValidationMessage ?? "",
     primaryGoal: user.primaryGoal,
     mainDifficulty: user.mainDifficulty,
     initialSetupCompleted: Boolean(user.initialSetupCompleted),
@@ -121,6 +124,11 @@ class DailyPlanRepository {
                 ...(profile.currentLevel ? { currentLevel: profile.currentLevel } : {}),
                 ...(profile.dailyMinutes ? { dailyMinutes: profile.dailyMinutes } : {}),
                 ...(profile.profession ? { profession: profile.profession } : {}),
+                ...(profile.professionalFocusMode ? { professionalFocusMode: profile.professionalFocusMode } : {}),
+                ...(profile.professionValidationStatus ? { professionValidationStatus: profile.professionValidationStatus } : {}),
+                ...(profile.professionValidationMessage !== undefined
+                    ? { professionValidationMessage: profile.professionValidationMessage }
+                    : {}),
                 ...(profile.primaryGoal ? { primaryGoal: profile.primaryGoal } : {}),
                 ...(profile.mainDifficulty ? { mainDifficulty: profile.mainDifficulty } : {}),
                 ...(profile.initialSetupCompleted !== undefined

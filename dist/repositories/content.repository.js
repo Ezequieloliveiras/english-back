@@ -41,25 +41,125 @@ const getPlanRotation = (dailyPlan) => {
     return index >= 0 ? index : 0;
 };
 const safeText = (value, fallback) => value.trim().replace(/\s+/g, " ") || fallback;
+const normalizeProfessionText = (value) => value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+const professionalProfile = (user) => {
+    const profession = safeText(user.profession, "work");
+    if (user.professionalFocusMode !== "profession") {
+        return {
+            enabled: false,
+            area: profession,
+            scenario: `A short work conversation about priorities in ${profession}.`,
+            task: `${profession} task`,
+            terms: ["priority", "deadline", "next step"],
+            phrases: [
+                "I can explain the next step in simple English.",
+                `My goal today is to practice: ${safeText(user.primaryGoal, "speak with more confidence")}.`,
+            ],
+        };
+    }
+    const normalized = normalizeProfessionText(profession);
+    if (normalized.includes("marketing") || normalized.includes("growth") || normalized.includes("social media")) {
+        return {
+            enabled: true,
+            area: "marketing",
+            scenario: "A marketing check-in about campaign performance, audience, and next actions.",
+            task: "marketing campaign",
+            terms: ["campaign", "audience", "conversion", "content calendar", "brand message"],
+            phrases: [
+                "The campaign needs a clearer message for this audience.",
+                "I will compare the conversion rate before changing the content.",
+            ],
+        };
+    }
+    if (normalized.includes("sales") || normalized.includes("vendas")) {
+        return {
+            enabled: true,
+            area: "sales",
+            scenario: "A sales conversation about leads, objections, follow-up, and proposals.",
+            task: "sales pipeline",
+            terms: ["lead", "objection", "proposal", "follow-up", "decision maker"],
+            phrases: [
+                "I need to understand the customer's main objection.",
+                "I will send a clear follow-up with the next step.",
+            ],
+        };
+    }
+    if (normalized.includes("support") || normalized.includes("suporte") || normalized.includes("customer success")) {
+        return {
+            enabled: true,
+            area: "customer support",
+            scenario: "A support conversation about tickets, escalation, customer context, and resolution.",
+            task: "customer support case",
+            terms: ["ticket", "escalation", "resolution", "customer context", "response time"],
+            phrases: [
+                "I need more context before I escalate this ticket.",
+                "I will explain the solution clearly to the customer.",
+            ],
+        };
+    }
+    if (normalized.includes("developer") || normalized.includes("desenvolvedor") || normalized.includes("engineer")) {
+        return {
+            enabled: true,
+            area: "software development",
+            scenario: "A technical conversation about a task, bug, API, review, or deployment.",
+            task: "technical task",
+            terms: ["bug", "API", "pull request", "deployment", "edge case"],
+            phrases: [
+                "I can explain the issue and suggest a solution.",
+                "I need to check the API response before I continue.",
+            ],
+        };
+    }
+    if (normalized.includes("design") || normalized.includes("designer")) {
+        return {
+            enabled: true,
+            area: "design",
+            scenario: "A design review about layout, user flow, visual hierarchy, and feedback.",
+            task: "design review",
+            terms: ["layout", "user flow", "visual hierarchy", "feedback", "prototype"],
+            phrases: [
+                "The layout should make the main action clearer.",
+                "I will update the prototype after the feedback.",
+            ],
+        };
+    }
+    return {
+        enabled: true,
+        area: profession,
+        scenario: `A realistic professional conversation in ${profession}.`,
+        task: `${profession} task`,
+        terms: ["priority", "stakeholder", "deadline", "result", "next step"],
+        phrases: [
+            `I need to clarify the priority for this ${profession} task.`,
+            `I can explain the result in simple English for my ${profession} context.`,
+        ],
+    };
+};
 const buildPlanScenario = (user, dailyPlan) => {
     const rotation = getPlanRotation(dailyPlan);
     const profession = safeText(user.profession, "your work");
     const goal = safeText(user.primaryGoal, "speak with more confidence");
+    const profile = professionalProfile(user);
     const scenarios = [
         {
             title: "Planning the Next Task",
-            situation: `A short work conversation about priorities in ${profession}.`,
+            situation: profile.scenario,
             dialogue: [
                 "Manager: What is your main focus for this session?",
                 `Student: I want to practice English for ${goal}.`,
                 "Manager: Good. What is one small task you can finish now?",
-                "Student: I can explain my next step in simple English.",
+                `Student: ${profile.phrases[0]}`,
             ],
             translations: [
                 "Qual é o seu foco principal nesta sessão?",
                 `Eu quero praticar inglês para ${goal}.`,
                 "Certo. Qual é uma pequena tarefa que você consegue terminar agora?",
-                "Eu consigo explicar meu próximo passo em inglês simples.",
+                `Eu consigo dizer: ${profile.phrases[0]}`,
             ],
             questions: [
                 { prompt: "What does the student want to practice?", answer: goal },
@@ -68,18 +168,20 @@ const buildPlanScenario = (user, dailyPlan) => {
         },
         {
             title: "Explaining a Blocker",
-            situation: "A teammate asks for a clear update about a blocker.",
+            situation: profile.enabled
+                ? `A teammate asks for a clear ${profile.area} update.`
+                : "A teammate asks for a clear update about a blocker.",
             dialogue: [
                 "Teammate: Are you blocked on anything right now?",
                 "Student: Yes, I need more context before I continue.",
                 "Teammate: What context do you need?",
-                `Student: I need the goal and the expected result for this ${profession} task.`,
+                `Student: I need the goal and the expected result for this ${profile.task}.`,
             ],
             translations: [
                 "Você está bloqueado em alguma coisa agora?",
                 "Sim, eu preciso de mais contexto antes de continuar.",
                 "De que contexto você precisa?",
-                `Eu preciso do objetivo e do resultado esperado para esta tarefa de ${profession}.`,
+                `Eu preciso do objetivo e do resultado esperado para esta tarefa de ${profile.area}.`,
             ],
             questions: [
                 { prompt: "What does the student need?", answer: "More context." },
@@ -171,29 +273,25 @@ const buildPlanShadowingItems = (user, dailyPlan) => {
     const rotation = getPlanRotation(dailyPlan);
     const goal = safeText(user.primaryGoal, "speak with more confidence");
     const profession = safeText(user.profession, "work");
+    const profile = professionalProfile(user);
     const sets = [
         [
             {
                 id: `plan-shadowing-${dailyPlan.date}-${rotation}-1`,
-                phrase: "I can explain the next step in simple English.",
-                naturalTranslation: "Eu consigo explicar o próximo passo em inglês simples.",
-                pronunciationHint: "Stress 'next step' and keep the ending clear.",
-                context: `Use this for ${profession} updates.`,
-                chunks: [
-                    { text: "I can explain", meaning: "Eu consigo explicar" },
-                    { text: "the next step", meaning: "o próximo passo" },
-                    { text: "in simple English", meaning: "em inglês simples" },
-                ],
+                phrase: profile.phrases[0],
+                naturalTranslation: `Frase útil para ${profile.area}: ${profile.phrases[0]}`,
+                pronunciationHint: "Stress the key professional term and keep the ending clear.",
+                context: `Use this for ${profile.area} updates.`,
+                chunks: chunkByPhrase(profile.phrases[0], `frase de ${profile.area}`),
             },
             {
                 id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
-                phrase: `My goal today is to practice: ${goal}.`,
-                naturalTranslation: `Meu objetivo hoje é praticar: ${goal}.`,
+                phrase: profile.enabled ? profile.phrases[1] : `My goal today is to practice: ${goal}.`,
+                naturalTranslation: profile.enabled
+                    ? `Frase útil para ${profile.area}: ${profile.phrases[1]}`
+                    : `Meu objetivo hoje é praticar: ${goal}.`,
                 pronunciationHint: "Pause briefly after 'today' and finish with confidence.",
-                chunks: [
-                    { text: "My goal today", meaning: "Meu objetivo hoje" },
-                    { text: "is to practice", meaning: "e praticar" },
-                ],
+                chunks: chunkByPhrase(profile.enabled ? profile.phrases[1] : `My goal today is to practice: ${goal}.`, "frase de treino"),
             },
         ],
         [
@@ -225,19 +323,20 @@ const buildPlanShadowingItems = (user, dailyPlan) => {
 };
 const buildPlanVocabulary = (user, dailyPlan) => {
     const rotation = getPlanRotation(dailyPlan);
+    const profile = professionalProfile(user);
     const nextReview = new Date();
     nextReview.setDate(nextReview.getDate() + 2);
     return [
         {
             id: `plan-vocab-${dailyPlan.date}-${rotation}-1`,
-            phrase: "I need to confirm one detail first.",
-            translation: "Preciso confirmar um detalhe primeiro.",
+            phrase: profile.enabled ? `I need to clarify the ${profile.terms[0]} first.` : "I need to confirm one detail first.",
+            translation: profile.enabled ? `Preciso esclarecer ${profile.terms[0]} primeiro.` : "Preciso confirmar um detalhe primeiro.",
             level: user.currentLevel,
-            category: "Current plan",
+            category: profile.enabled ? `${profile.area} focus` : "Current plan",
             sentences: [
-                { text: "I need to confirm one detail first.", translation: "Preciso confirmar um detalhe primeiro." },
-                { text: "I need to confirm the priority.", translation: "Preciso confirmar a prioridade." },
-                { text: "I need to confirm the deadline.", translation: "Preciso confirmar o prazo." },
+                { text: profile.phrases[0], translation: `Frase contextual de ${profile.area}.` },
+                { text: `I need to confirm the ${profile.terms[0]}.`, translation: `Preciso confirmar ${profile.terms[0]}.` },
+                { text: `The ${profile.terms[1]} is important for the next step.`, translation: `${profile.terms[1]} é importante para o próximo passo.` },
             ],
             confidence: 50,
             nextReviewAt: nextReview.toISOString(),

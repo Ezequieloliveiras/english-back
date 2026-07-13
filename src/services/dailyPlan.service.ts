@@ -220,7 +220,39 @@ const goalBoost = (goal: string): Partial<Record<StudyBlockType, number>> => {
   return {};
 };
 
+const professionBoost = (profile: UserProfile): Partial<Record<StudyBlockType, number>> => {
+  if (profile.professionalFocusMode !== "profession") {
+    return {};
+  }
+
+  return {
+    conversation: 0.08,
+    vocabulary: 0.06,
+    listening: 0.04,
+    shadowing: 0.03,
+    review: 0.02,
+  };
+};
+
+const buildProfessionalObjective = (block: StudyBlockType, profession: string) => {
+  const area = profession.trim() || "sua profissão";
+  const objectives: Record<StudyBlockType, string> = {
+    shadowing: `Repeat phrases used in ${area} conversations with natural rhythm.`,
+    "speaking-coach": `Practice clear pronunciation for ${area} updates, explanations, and decisions.`,
+    listening: `Understand short workplace dialogues from the ${area} context.`,
+    vocabulary: `Review complete sentences, terms, and situations from ${area}.`,
+    conversation: `Practice realistic ${area} conversations, questions, and follow-ups.`,
+    review: `Revisit weak phrases from your ${area} practice cycle.`,
+  };
+
+  return objectives[block];
+};
+
 const buildFocus = (profile: UserProfile) => {
+  if (profile.professionalFocusMode === "profession") {
+    return `Professional focus: English for ${profile.profession}. Goal: ${profile.primaryGoal}`;
+  }
+
   const focusByDifficulty: Record<UserProfile["mainDifficulty"], string> = {
     speaking: "Build speaking confidence with short, realistic conversations.",
     listening: "Train your ear with short, comprehensible input before output.",
@@ -310,6 +342,7 @@ export class DailyPlanService {
     weights = applyBoost(weights, difficultyBoost[difficulty]);
     weights = applyBoost(weights, levelBoost[level] ?? levelBoost[levelBand(level) as EnglishLevel] ?? {});
     weights = applyBoost(weights, goalBoost(profile.primaryGoal));
+    weights = applyBoost(weights, professionBoost(profile));
 
     const allocations = distributeMinutes(profile.dailyMinutes, weights);
     const rotationIndex = allocations.length ? Math.abs(rotation) % allocations.length : 0;
@@ -320,6 +353,10 @@ export class DailyPlanService {
     const blocks = orderedAllocations.map(({ type, minutes }, index) => ({
       id: `${date}-${type}-${index + 1}`,
       ...blockTemplates[type],
+      objective:
+        profile.professionalFocusMode === "profession"
+          ? buildProfessionalObjective(type, profile.profession)
+          : blockTemplates[type].objective,
       durationMinutes: minutes,
       status: "not_started" as const,
       progress: 0,

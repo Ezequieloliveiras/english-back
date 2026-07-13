@@ -259,6 +259,9 @@ export interface UserProfile {
   currentLevel: EnglishLevel;
   dailyMinutes: number;
   profession: string;
+  professionalFocusMode?: "standard" | "profession";
+  professionValidationStatus?: "unchecked" | "verified" | "rejected";
+  professionValidationMessage?: string;
   primaryGoal: string;
   mainDifficulty: "listening" | "speaking" | "vocabulary" | "pronunciation";
   initialSetupCompleted: boolean;

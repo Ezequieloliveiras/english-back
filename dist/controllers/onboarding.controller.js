@@ -9,7 +9,7 @@ class OnboardingController {
                 response.status(401).json({ message: "Authentication required" });
                 return;
             }
-            const { name, objective, level, dailyMinutes, profession, difficulty } = request.body;
+            const { name, objective, level, dailyMinutes, profession, professionalFocusMode, difficulty } = request.body;
             if (!name || !objective || !level || !dailyMinutes || !profession || !difficulty) {
                 response.status(400).json({ message: "Missing onboarding fields" });
                 return;
@@ -20,9 +20,10 @@ class OnboardingController {
                 level: level,
                 dailyMinutes,
                 profession,
+                professionalFocusMode,
                 difficulty: difficulty,
             });
-            response.status(201).json(result);
+            response.status(result.status).json(result.body);
         };
     }
 }

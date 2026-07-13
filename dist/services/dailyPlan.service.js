@@ -184,7 +184,34 @@ const goalBoost = (goal) => {
     }
     return {};
 };
+const professionBoost = (profile) => {
+    if (profile.professionalFocusMode !== "profession") {
+        return {};
+    }
+    return {
+        conversation: 0.08,
+        vocabulary: 0.06,
+        listening: 0.04,
+        shadowing: 0.03,
+        review: 0.02,
+    };
+};
+const buildProfessionalObjective = (block, profession) => {
+    const area = profession.trim() || "sua profissão";
+    const objectives = {
+        shadowing: `Repeat phrases used in ${area} conversations with natural rhythm.`,
+        "speaking-coach": `Practice clear pronunciation for ${area} updates, explanations, and decisions.`,
+        listening: `Understand short workplace dialogues from the ${area} context.`,
+        vocabulary: `Review complete sentences, terms, and situations from ${area}.`,
+        conversation: `Practice realistic ${area} conversations, questions, and follow-ups.`,
+        review: `Revisit weak phrases from your ${area} practice cycle.`,
+    };
+    return objectives[block];
+};
 const buildFocus = (profile) => {
+    if (profile.professionalFocusMode === "profession") {
+        return `Professional focus: English for ${profile.profession}. Goal: ${profile.primaryGoal}`;
+    }
     const focusByDifficulty = {
         speaking: "Build speaking confidence with short, realistic conversations.",
         listening: "Train your ear with short, comprehensible input before output.",
@@ -255,6 +282,7 @@ class DailyPlanService {
         weights = applyBoost(weights, difficultyBoost[difficulty]);
         weights = applyBoost(weights, levelBoost[level] ?? levelBoost[levelBand(level)] ?? {});
         weights = applyBoost(weights, goalBoost(profile.primaryGoal));
+        weights = applyBoost(weights, professionBoost(profile));
         const allocations = distributeMinutes(profile.dailyMinutes, weights);
         const rotationIndex = allocations.length ? Math.abs(rotation) % allocations.length : 0;
         const orderedAllocations = [
@@ -264,6 +292,9 @@ class DailyPlanService {
         const blocks = orderedAllocations.map(({ type, minutes }, index) => ({
             id: `${date}-${type}-${index + 1}`,
             ...blockTemplates[type],
+            objective: profile.professionalFocusMode === "profession"
+                ? buildProfessionalObjective(type, profile.profession)
+                : blockTemplates[type].objective,
             durationMinutes: minutes,
             status: "not_started",
             progress: 0,

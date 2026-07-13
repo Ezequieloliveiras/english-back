@@ -12,12 +12,13 @@ export class OnboardingController {
       return;
     }
 
-    const { name, objective, level, dailyMinutes, profession, difficulty } = request.body as {
+    const { name, objective, level, dailyMinutes, profession, professionalFocusMode, difficulty } = request.body as {
       name?: string;
       objective?: string;
       level?: string;
       dailyMinutes?: number;
       profession?: string;
+      professionalFocusMode?: UserProfile["professionalFocusMode"];
       difficulty?: string;
     };
 
@@ -32,9 +33,10 @@ export class OnboardingController {
       level: level as EnglishLevel,
       dailyMinutes,
       profession,
+      professionalFocusMode,
       difficulty: difficulty as UserProfile["mainDifficulty"],
     });
 
-    response.status(201).json(result);
+    response.status(result.status).json(result.body);
   };
 }

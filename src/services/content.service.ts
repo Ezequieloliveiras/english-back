@@ -37,7 +37,9 @@ export class ContentService {
       this.userGoalRepository?.findByUserId(userId) ?? Promise.resolve(null),
     ]);
     const recalculatedProgress = await this.progressService?.recalculateSkillScores(userId, user.currentLevel);
-    const personalizedContent = this.contentRepository.personalizeForPlan(content, user, dailyPlan);
+    const personalizedContent = this.contentRepository.personalizeForPlan(content, user, dailyPlan, {
+      completedActivities: completionState.completedActivities,
+    });
 
     return {
       user,

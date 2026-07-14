@@ -36,6 +36,7 @@ const dailyPlan: DailyPlan = {
     },
   ],
 };
+const firstRotationDailyPlan = { ...dailyPlan, date: "2026-01-01" };
 
 describe("ContentRepository.personalizeForPlan", () => {
   it("keeps generated English dialogue in English when the user goal is Portuguese", () => {
@@ -52,17 +53,17 @@ describe("ContentRepository.personalizeForPlan", () => {
     const result = repository.personalizeForPlan(
       content,
       buildProfile("Falar em reuniões e entrevistas"),
-      dailyPlan
+      firstRotationDailyPlan
     );
 
     const generatedLesson = result.listeningLessons[0];
-    const generatedShadowing = result.shadowingItems[1];
+    const generatedShadowing = result.shadowingItems.find((item) => item.text.includes("meetings and interviews"));
     const comprehension = generatedLesson.comprehension ?? [];
 
     expect(generatedLesson.dialogue.join(" ")).toContain("meetings and interviews");
     expect(generatedLesson.dialogue.join(" ")).not.toMatch(/falar|reuniões|entrevistas/i);
     expect(comprehension[1].translationPtBr).toContain("reuniões e entrevistas");
-    expect(generatedShadowing.text).toContain("meetings and interviews");
+    expect(generatedShadowing?.text).toContain("meetings and interviews");
   });
 
   it("keeps shadowing support copy in Portuguese while the practice phrase stays English", () => {
@@ -83,16 +84,52 @@ describe("ContentRepository.personalizeForPlan", () => {
         professionalFocusMode: "profession",
         professionValidationStatus: "verified",
       }),
-      dailyPlan
+      firstRotationDailyPlan
     );
 
-    const generatedShadowing = result.shadowingItems[0];
+    const generatedShadowing = result.shadowingItems.find(
+      (item) => item.text === "The layout should make the main action clearer."
+    );
 
-    expect(generatedShadowing.text).toBe("The layout should make the main action clearer.");
-    expect(generatedShadowing.translation).toBe("O layout deve deixar a ação principal mais clara.");
-    expect(generatedShadowing.explanation).toBe("Use em atualizações de design.");
-    expect(generatedShadowing.pronunciationTip).toBe(
+    expect(generatedShadowing?.text).toBe("The layout should make the main action clearer.");
+    expect(generatedShadowing?.translation).toBe("O layout deve deixar a ação principal mais clara.");
+    expect(generatedShadowing?.explanation).toBe("Use em atualizações de design.");
+    expect(generatedShadowing?.pronunciationTip).toBe(
       "Destaque o termo profissional principal e mantenha o final claro."
     );
+  });
+
+  it("prioritizes new shadowing phrases over recently completed phrases", () => {
+    const repository = new ContentRepository();
+    const content = {
+      vocabulary: [],
+      listeningLessons: [],
+      shadowingItems: [],
+      conversationModes: [],
+      developerModes: [],
+      thinkInEnglishPrompts: [],
+    };
+    const profile = buildProfile("Falar melhor no trabalho", {
+      profession: "Developer",
+      professionalFocusMode: "profession",
+      professionValidationStatus: "verified",
+    });
+    const firstPlan = repository.personalizeForPlan(content, profile, dailyPlan);
+    const completed = firstPlan.shadowingItems.slice(0, 2).map((item, index) => ({
+      id: `activity-${index}`,
+      type: "shadowing",
+      itemId: item.id,
+      title: item.text,
+      completedAt: new Date(Date.now() - index * 1000).toISOString(),
+    }));
+    const nextPlan = repository.personalizeForPlan(content, profile, dailyPlan, {
+      completedActivities: completed,
+    });
+    const repeatedRecently = nextPlan.shadowingItems.filter((item) =>
+      completed.some((activity) => activity.title === item.text)
+    );
+
+    expect(repeatedRecently).toHaveLength(0);
+    expect(nextPlan.shadowingItems.length).toBeGreaterThanOrEqual(3);
   });
 });

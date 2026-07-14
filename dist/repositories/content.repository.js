@@ -42,6 +42,21 @@ const getPlanRotation = (dailyPlan) => {
     return index >= 0 ? index : 0;
 };
 const safeText = (value, fallback) => value.trim().replace(/\s+/g, " ") || fallback;
+const normalizeContentKey = (value) => value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+const stableContentId = (prefix, text) => {
+    let hash = 0;
+    for (const character of normalizeContentKey(text)) {
+        hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+    }
+    return `${prefix}-${hash.toString(36)}`;
+};
+const numericDateSeed = (date) => date.split("-").reduce((sum, part) => sum + Number(part), 0);
 const normalizeGoalText = (value) => value
     .toLowerCase()
     .normalize("NFD")
@@ -346,6 +361,117 @@ const translateGeneratedPhrase = (phrase, area) => {
     }
     return `Frase útil para ${area}.`;
 };
+const buildShadowingCandidates = (user, dailyPlan) => {
+    const goal = buildGoalContext(user.primaryGoal);
+    const profile = professionalProfile(user);
+    const area = profile.area;
+    const terms = profile.terms.length ? profile.terms : ["priority", "deadline", "next step"];
+    const primaryTerm = terms[0] ?? "priority";
+    const secondaryTerm = terms[1] ?? "deadline";
+    const tertiaryTerm = terms[2] ?? "next step";
+    const specs = [
+        {
+            text: profile.phrases[0],
+            translation: translateGeneratedPhrase(profile.phrases[0], area),
+            explanation: `Use em atualizações de ${area}.`,
+            tip: "Destaque o termo profissional principal e mantenha o final claro.",
+        },
+        {
+            text: profile.enabled ? profile.phrases[1] : goal.englishGoalSentence,
+            translation: profile.enabled ? translateGeneratedPhrase(profile.phrases[1], area) : goal.portugueseGoalSentence,
+            explanation: "Use para transformar seu objetivo em uma frase curta e treinável.",
+            tip: "Faça uma pausa breve depois da ideia principal e termine com confiança.",
+        },
+        {
+            text: `I need to clarify the ${primaryTerm} before I continue.`,
+            translation: `Eu preciso esclarecer ${primaryTerm} antes de continuar.`,
+            explanation: "Use quando falta uma informação importante para seguir.",
+            tip: "Conecte 'need to' naturalmente, próximo de 'needta'.",
+        },
+        {
+            text: `The ${secondaryTerm} is important for the next step.`,
+            translation: `${secondaryTerm} é importante para o próximo passo.`,
+            explanation: "Use para explicar por que uma informação afeta a próxima ação.",
+            tip: "Dê ênfase ao termo principal e finalize 'next step' com clareza.",
+        },
+        {
+            text: `I will update the team after I check the ${tertiaryTerm}.`,
+            translation: `Vou atualizar a equipe depois de verificar ${tertiaryTerm}.`,
+            explanation: "Use quando você promete retorno depois de confirmar uma informação.",
+            tip: "Mantenha 'will update' conectado e claro.",
+        },
+        {
+            text: `Can you confirm the ${primaryTerm} for this ${area} task?`,
+            translation: `Você pode confirmar ${primaryTerm} para esta tarefa de ${area}?`,
+            explanation: "Use para pedir confirmação de forma direta e educada.",
+            tip: "Reduza 'can you' naturalmente e destaque a informação pedida.",
+        },
+        {
+            text: `I can explain the result in simple English.`,
+            translation: "Eu consigo explicar o resultado em inglês simples.",
+            explanation: "Use para praticar clareza antes de falar com mais detalhes.",
+            tip: "Dê ritmo a 'simple English' sem correr.",
+        },
+        {
+            text: `I am working on the ${tertiaryTerm} now.`,
+            translation: `Estou trabalhando em ${tertiaryTerm} agora.`,
+            explanation: "Use para dar uma atualização curta sobre o que você está fazendo.",
+            tip: "Conecte 'working on' de forma fluida.",
+        },
+        {
+            text: "I need one more example before I decide.",
+            translation: "Preciso de mais um exemplo antes de decidir.",
+            explanation: "Use quando você precisa de mais evidência antes de escolher.",
+            tip: "Dê ênfase a 'one more example'.",
+        },
+        {
+            text: "I can give you a quick update now.",
+            translation: "Posso te dar uma atualização rápida agora.",
+            explanation: "Use para iniciar uma atualização curta em contexto profissional.",
+            tip: "Mantenha 'quick update' como um bloco só.",
+        },
+        {
+            text: "I want to make sure I understand the goal.",
+            translation: "Quero garantir que entendi o objetivo.",
+            explanation: "Use quando você quer confirmar entendimento antes de agir.",
+            tip: "Fale 'make sure' como uma unidade natural.",
+        },
+        {
+            text: "I will practice this phrase again during review.",
+            translation: "Vou praticar esta frase novamente durante a revisão.",
+            explanation: "Use para marcar uma frase como revisão intencional.",
+            tip: "Dê uma pausa leve antes de 'during review'.",
+        },
+    ];
+    return specs.map((spec) => buildShadowingItem({
+        id: stableContentId("shadowing", spec.text),
+        text: spec.text,
+        translation: spec.translation,
+        explanation: spec.explanation,
+        pronunciationTip: spec.tip,
+        chunks: chunkByPhrase(spec.text, spec.translation),
+    }));
+};
+const selectShadowingItems = (candidates, catalogItems, dailyPlan, history = {}) => {
+    const completed = (history.completedActivities ?? [])
+        .filter((activity) => activity.type === "shadowing" || activity.type === "repetition")
+        .sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt));
+    const trainedIds = new Set(completed.map((activity) => activity.itemId));
+    const trainedTexts = new Set(completed.map((activity) => normalizeContentKey(activity.title)));
+    const recentlyTrainedTexts = new Set(completed.slice(0, 12).map((activity) => normalizeContentKey(activity.title)));
+    const seed = getPlanRotation(dailyPlan) + numericDateSeed(dailyPlan.date);
+    const pool = rotateItems(uniqueBy([...candidates, ...catalogItems], (item) => item.text), seed);
+    const fresh = pool.filter((item) => !trainedIds.has(item.id) && !trainedTexts.has(normalizeContentKey(item.text)));
+    const review = pool.filter((item) => trainedIds.has(item.id) || trainedTexts.has(normalizeContentKey(item.text)));
+    const spacedReview = review.filter((item) => !recentlyTrainedTexts.has(normalizeContentKey(item.text)));
+    const selectedFresh = fresh.slice(0, 4);
+    const selectedReview = spacedReview.slice(0, selectedFresh.length >= 3 ? 1 : 2);
+    const selected = uniqueBy([...selectedFresh, ...selectedReview], (item) => item.text);
+    if (selected.length >= 3) {
+        return selected;
+    }
+    return uniqueBy([...selected, ...pool], (item) => item.text).slice(0, 4);
+};
 const buildPlanListeningLesson = (user, dailyPlan) => {
     const rotation = getPlanRotation(dailyPlan);
     const scenario = buildPlanScenario(user, dailyPlan);
@@ -373,59 +499,7 @@ const buildPlanListeningLesson = (user, dailyPlan) => {
         }),
     };
 };
-const buildPlanShadowingItems = (user, dailyPlan) => {
-    const rotation = getPlanRotation(dailyPlan);
-    const goal = buildGoalContext(user.primaryGoal);
-    const profile = professionalProfile(user);
-    const sets = [
-        [
-            buildShadowingItem({
-                id: `plan-shadowing-${dailyPlan.date}-${rotation}-1`,
-                text: profile.phrases[0],
-                translation: translateGeneratedPhrase(profile.phrases[0], profile.area),
-                pronunciationTip: "Destaque o termo profissional principal e mantenha o final claro.",
-                explanation: `Use em atualizações de ${profile.area}.`,
-                chunks: chunkByPhrase(profile.phrases[0], translateGeneratedPhrase(profile.phrases[0], profile.area)),
-            }),
-            buildShadowingItem({
-                id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
-                text: profile.enabled ? profile.phrases[1] : goal.englishGoalSentence,
-                translation: profile.enabled
-                    ? translateGeneratedPhrase(profile.phrases[1], profile.area)
-                    : goal.portugueseGoalSentence,
-                pronunciationTip: "Faça uma pausa breve depois da ideia principal e termine com confiança.",
-                chunks: chunkByPhrase(profile.enabled ? profile.phrases[1] : goal.englishGoalSentence, profile.enabled ? translateGeneratedPhrase(profile.phrases[1], profile.area) : goal.portugueseGoalSentence),
-            }),
-        ],
-        [
-            buildShadowingItem({
-                id: `plan-shadowing-${dailyPlan.date}-${rotation}-1`,
-                text: "I need to confirm the priority before I continue.",
-                translation: "Eu preciso confirmar a prioridade antes de continuar.",
-                explanation: "Use quando você precisa confirmar prioridade antes de seguir com uma tarefa.",
-                pronunciationTip: "Conecte 'need to' naturalmente, próximo de 'needta'.",
-                chunks: [
-                    { text: "I need to confirm", translation: "Eu preciso confirmar" },
-                    { text: "the priority", translation: "a prioridade" },
-                    { text: "before I continue", translation: "antes de continuar" },
-                ],
-            }),
-            buildShadowingItem({
-                id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
-                text: "Could you give me one example, please?",
-                translation: "Você poderia me dar um exemplo, por favor?",
-                explanation: "Use quando você precisa de um exemplo para entender melhor.",
-                pronunciationTip: "Reduza 'could you' e dê ênfase a 'one example'.",
-                chunks: [
-                    { text: "Could you give me", translation: "Você poderia me dar" },
-                    { text: "one example", translation: "um exemplo" },
-                    { text: "please", translation: "por favor" },
-                ],
-            }),
-        ],
-    ];
-    return sets[rotation % sets.length];
-};
+const buildPlanShadowingItems = (user, dailyPlan) => buildShadowingCandidates(user, dailyPlan);
 const buildPlanVocabulary = (user, dailyPlan) => {
     const rotation = getPlanRotation(dailyPlan);
     const profile = professionalProfile(user);
@@ -580,8 +654,9 @@ class ContentRepository {
             thinkInEnglishPrompts: byKey.get("thinkInEnglishPrompts") ?? [],
         };
     }
-    personalizeForPlan(content, user, dailyPlan) {
+    personalizeForPlan(content, user, dailyPlan, history = {}) {
         const rotation = getPlanRotation(dailyPlan);
+        const shadowingCandidates = buildPlanShadowingItems(user, dailyPlan);
         return {
             vocabulary: uniqueBy([
                 ...buildPlanVocabulary(user, dailyPlan),
@@ -591,10 +666,7 @@ class ContentRepository {
                 buildPlanListeningLesson(user, dailyPlan),
                 ...rotateItems(content.listeningLessons, rotation),
             ], (item) => item.id),
-            shadowingItems: uniqueBy([
-                ...buildPlanShadowingItems(user, dailyPlan),
-                ...rotateItems(content.shadowingItems, rotation),
-            ], (item) => item.text),
+            shadowingItems: selectShadowingItems(shadowingCandidates, rotateItems(content.shadowingItems, rotation), dailyPlan, history),
             conversationModes: rotateItems(content.conversationModes, rotation),
             developerModes: rotateItems(content.developerModes, rotation),
             thinkInEnglishPrompts: [

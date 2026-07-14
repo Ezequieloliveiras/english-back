@@ -1,10 +1,10 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { EnglishLevel, UserProfile } from "../types";
-import { OnboardingService } from "../services/onboarding.service";
+import { ProfilePlanService } from "../services/profilePlan.service";
 
-export class OnboardingController {
-  constructor(private readonly onboardingService: OnboardingService) {}
+export class ProfilePlanController {
+  constructor(private readonly profilePlanService: ProfilePlanService) {}
 
   createPlan = async (request: AuthenticatedRequest, response: Response) => {
     if (!request.auth?.userId) {
@@ -23,11 +23,11 @@ export class OnboardingController {
     };
 
     if (!name || !objective || !level || !dailyMinutes || !profession || !difficulty) {
-      response.status(400).json({ message: "Missing onboarding fields" });
+      response.status(400).json({ message: "Missing profile plan fields" });
       return;
     }
 
-    const result = await this.onboardingService.buildPlan(request.auth.userId, {
+    const result = await this.profilePlanService.buildPlan(request.auth.userId, {
       name,
       objective,
       level: level as EnglishLevel,

@@ -1,7 +1,6 @@
 import { PracticeRepository } from "../repositories/practice.repository";
 import { StudyBlockType } from "../types";
 import { DailyPlanService } from "./dailyPlan.service";
-import { LearningService } from "./learning.service";
 
 const activityTypeToDailyPlanEvidence = (type: string): {
   blockType: StudyBlockType;
@@ -39,7 +38,6 @@ const activityTypeToDailyPlanEvidence = (type: string): {
 export class PracticeService {
   constructor(
     private readonly practiceRepository: PracticeRepository,
-    private readonly learningService?: LearningService,
     private readonly dailyPlanService?: DailyPlanService
   ) {}
 
@@ -69,18 +67,6 @@ export class PracticeService {
         evidenceType: evidence.evidenceType,
         evidenceRef: input.itemId,
       });
-
-      if (evidence.blockType !== "listening" && evidence.blockType !== "speaking-coach") {
-        await this.learningService?.recordPracticeCompletionEvidence({
-          userId: input.userId,
-          moduleType: evidence.blockType,
-          sourceId: input.itemId,
-          metadata: {
-            title: input.title,
-            evidenceType: evidence.evidenceType,
-          },
-        });
-      }
     }
 
     return {
@@ -108,7 +94,6 @@ export class PracticeService {
     slowAudioUsed?: boolean;
     replayCount?: number;
     unknownWords?: string[];
-    competencyIds?: string[];
   }) {
     if (!input.exerciseId || !input.expectedText) {
       return { status: 400, body: { message: "exerciseId and expectedText are required" } };
@@ -129,17 +114,6 @@ export class PracticeService {
     const attempt = saved.attempt;
 
     if (saved.created) {
-      await this.learningService?.recordListeningAttemptEvidence({
-        userId: input.userId,
-        exerciseId: input.exerciseId,
-        competencyIds: input.competencyIds,
-        comprehensionCorrect: Boolean(input.comprehensionCorrect),
-        translationOpened: Boolean(input.translationOpened),
-        transcriptOpened: Boolean(input.transcriptOpened),
-        slowAudioUsed: Boolean(input.slowAudioUsed),
-        replayCount: Math.max(0, Number(input.replayCount ?? 0)),
-        unknownWords: Array.isArray(input.unknownWords) ? input.unknownWords : [],
-      });
       await this.dailyPlanService?.recordBlockEvidence({
         userId: input.userId,
         blockType: "listening",

@@ -1,7 +1,6 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { DailyPlanService } from "../services/dailyPlan.service";
-import { LearningService } from "../services/learning.service";
 import { AiProviderError, OpenAiService } from "../services/openai.service";
 
 const MAX_MESSAGE_LENGTH = 1600;
@@ -36,8 +35,7 @@ const validateUserMessage = (body: { message?: string }, response: Response) => 
 export class AiController {
   constructor(
     private readonly openAiService: OpenAiService,
-    private readonly dailyPlanService?: DailyPlanService,
-    private readonly learningService?: LearningService
+    private readonly dailyPlanService?: DailyPlanService
   ) {}
 
   conversation = async (request: AuthenticatedRequest, response: Response) => {
@@ -178,20 +176,6 @@ export class AiController {
         blockType: "speaking-coach",
         evidenceType: "pronunciation_analysis",
         evidenceRef: targetPhrase.trim(),
-      });
-      await this.learningService?.recordPracticeCompletionEvidence({
-        userId: request.auth.userId,
-        moduleType: "speaking-coach",
-        sourceId: targetPhrase.trim(),
-        score: Math.round(result.overallScore * 10),
-        metadata: {
-          targetPhrase: targetPhrase.trim(),
-          transcript: result.transcript,
-          overallScore: result.overallScore,
-          metrics: result.metrics,
-          comparison: result.comparison,
-          audioQuality: result.audioQuality,
-        },
       });
       console.info("[ai:speaking-coach] response sent", {
         requestId,

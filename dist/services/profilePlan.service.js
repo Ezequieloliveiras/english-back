@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OnboardingService = void 0;
+exports.ProfilePlanService = void 0;
 const normalizeProfessionText = (value) => value
     .toLowerCase()
     .normalize("NFD")
@@ -139,7 +139,7 @@ const validateProfessionalFocus = (profession, mode) => {
         message: "Profissão reconhecida. O conteúdo será direcionado ao mundo profissional informado.",
     };
 };
-class OnboardingService {
+class ProfilePlanService {
     constructor(dailyPlanService) {
         this.dailyPlanService = dailyPlanService;
     }
@@ -199,4 +199,4 @@ class OnboardingService {
         };
     }
 }
-exports.OnboardingService = OnboardingService;
+exports.ProfilePlanService = ProfilePlanService;

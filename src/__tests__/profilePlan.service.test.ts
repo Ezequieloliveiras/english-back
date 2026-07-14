@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { DailyPlanService } from "../services/dailyPlan.service";
-import { OnboardingService } from "../services/onboarding.service";
+import { ProfilePlanService } from "../services/profilePlan.service";
 
 const buildDailyPlanService = () =>
   ({
@@ -37,10 +37,10 @@ const baseInput = {
   difficulty: "speaking" as const,
 };
 
-describe("OnboardingService professional focus", () => {
+describe("ProfilePlanService professional focus", () => {
   it("accepts a recognized profession when professional focus is enabled", async () => {
     const dailyPlanService = buildDailyPlanService();
-    const service = new OnboardingService(dailyPlanService);
+    const service = new ProfilePlanService(dailyPlanService);
 
     const result = await service.buildPlan("user-1", {
       ...baseInput,
@@ -55,7 +55,7 @@ describe("OnboardingService professional focus", () => {
 
   it("rejects illegal or harmful activity when professional focus is enabled", async () => {
     const dailyPlanService = buildDailyPlanService();
-    const service = new OnboardingService(dailyPlanService);
+    const service = new ProfilePlanService(dailyPlanService);
 
     const result = await service.buildPlan("user-1", {
       ...baseInput,
@@ -69,7 +69,7 @@ describe("OnboardingService professional focus", () => {
 
   it("keeps smart default without requiring deep profession validation", async () => {
     const dailyPlanService = buildDailyPlanService();
-    const service = new OnboardingService(dailyPlanService);
+    const service = new ProfilePlanService(dailyPlanService);
 
     const result = await service.buildPlan("user-1", {
       ...baseInput,

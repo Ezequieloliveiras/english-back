@@ -22,7 +22,7 @@ API em `Node.js + Express + TypeScript` para o MVP do English OS.
 - `GET /api/content/bootstrap`
 - `POST /api/conversations/reply`
 - `POST /api/reviews/record`
-- `POST /api/onboarding/plan`
+- `POST /api/profile/plan`
 - `GET /api/daily-plans/today`
 - `PATCH /api/daily-plans/blocks/complete`
 - `POST /api/ai/conversation`

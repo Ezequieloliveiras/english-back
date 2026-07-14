@@ -6,9 +6,8 @@ import { AuthController } from "../controllers/auth.controller";
 import { ContentController } from "../controllers/content.controller";
 import { ConversationController } from "../controllers/conversation.controller";
 import { DailyPlanController } from "../controllers/dailyPlan.controller";
-import { LearningController } from "../controllers/learning.controller";
-import { OnboardingController } from "../controllers/onboarding.controller";
 import { PracticeController } from "../controllers/practice.controller";
+import { ProfilePlanController } from "../controllers/profilePlan.controller";
 import { ReviewController } from "../controllers/review.controller";
 import { SettingsController } from "../controllers/settings.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
@@ -54,9 +53,8 @@ export const buildRouter = (
   authController: AuthController,
   conversationController: ConversationController,
   reviewController: ReviewController,
-  onboardingController: OnboardingController,
+  profilePlanController: ProfilePlanController,
   dailyPlanController: DailyPlanController,
-  learningController: LearningController,
   aiController: AiController,
   practiceController: PracticeController,
   settingsController: SettingsController
@@ -80,31 +78,10 @@ export const buildRouter = (
   router.get("/content/bootstrap", requireAuth, contentController.getBootstrap);
   router.post("/conversations/reply", requireAuth, conversationController.reply);
   router.post("/reviews/record", requireAuth, reviewController.record);
-  router.post("/onboarding/plan", requireAuth, onboardingController.createPlan);
+  router.post("/profile/plan", requireAuth, profilePlanController.createPlan);
   router.get("/daily-plans/today", requireAuth, dailyPlanController.getToday);
   router.post("/daily-plans/today/advance", requireAuth, dailyPlanController.advanceToday);
   router.patch("/daily-plans/blocks/complete", requireAuth, dailyPlanController.completeBlock);
-  router.get("/learning/roadmap", requireAuth, learningController.roadmap);
-  router.get("/learning/levels", requireAuth, learningController.levels);
-  router.get("/learning/levels/:level", requireAuth, learningController.level);
-  router.get("/learning/competencies", requireAuth, learningController.competencies);
-  router.get("/learning/competencies/:id", requireAuth, learningController.competency);
-  router.get("/learning/units", requireAuth, learningController.units);
-  router.get("/learning/units/:id", requireAuth, learningController.unit);
-  router.get("/users/me/competency-profile", requireAuth, learningController.competencyProfile);
-  router.get("/users/me/level-progress", requireAuth, learningController.levelProgress);
-  router.get("/users/me/roadmap", requireAuth, learningController.userRoadmap);
-  router.get("/users/me/daily-learning-context", requireAuth, learningController.dailyLearningContext);
-  router.post("/users/me/diagnostic/start", requireAuth, learningController.diagnosticStart);
-  router.post("/users/me/diagnostic/submit", requireAuth, learningController.diagnosticSubmit);
-  router.post("/users/me/diagnostic/finish", requireAuth, learningController.diagnosticFinish);
-  router.post("/learning/attempts", requireAuth, learningController.learningAttempt);
-  router.post("/learning/competencies/:id/evidence", requireAuth, learningController.evidence);
-  router.post("/learning/checkpoints/:id/start", requireAuth, learningController.checkpointStart);
-  router.post("/learning/checkpoints/:id/submit", requireAuth, learningController.checkpointSubmit);
-  router.post("/learning/checkpoints/:id/finish", requireAuth, learningController.checkpointFinish);
-  router.post("/users/me/daily-plan/generate", requireAuth, learningController.generateDailyPlan);
-  router.post("/users/me/daily-plan/refine", requireAuth, learningController.refineDailyPlan);
   router.post("/ai/conversation", requireAuth, aiController.conversation);
   router.post("/ai/dev-mode", requireAuth, aiController.devMode);
   router.post("/ai/think-in-english", requireAuth, aiController.thinkInEnglish);

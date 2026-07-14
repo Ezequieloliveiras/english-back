@@ -1,7 +1,7 @@
 import { DailyPlanService } from "./dailyPlan.service";
 import { EnglishLevel, UserProfile } from "../types";
 
-interface OnboardingInput {
+interface ProfilePlanInput {
   name: string;
   objective: string;
   level: EnglishLevel;
@@ -163,10 +163,10 @@ const validateProfessionalFocus = (profession: string, mode: UserProfile["profes
   };
 };
 
-export class OnboardingService {
+export class ProfilePlanService {
   constructor(private readonly dailyPlanService: DailyPlanService) {}
 
-  async buildPlan(userId: string, input: OnboardingInput) {
+  async buildPlan(userId: string, input: ProfilePlanInput) {
     const level = input.level.toUpperCase() as EnglishLevel;
     const professionalFocusMode: UserProfile["professionalFocusMode"] =
       input.professionalFocusMode === "profession" ? "profession" : "standard";

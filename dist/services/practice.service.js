@@ -24,9 +24,8 @@ const activityTypeToDailyPlanEvidence = (type) => {
     return null;
 };
 class PracticeService {
-    constructor(practiceRepository, learningService, dailyPlanService) {
+    constructor(practiceRepository, dailyPlanService) {
         this.practiceRepository = practiceRepository;
-        this.learningService = learningService;
         this.dailyPlanService = dailyPlanService;
     }
     async completeActivity(input) {
@@ -48,17 +47,6 @@ class PracticeService {
                 evidenceType: evidence.evidenceType,
                 evidenceRef: input.itemId,
             });
-            if (evidence.blockType !== "listening" && evidence.blockType !== "speaking-coach") {
-                await this.learningService?.recordPracticeCompletionEvidence({
-                    userId: input.userId,
-                    moduleType: evidence.blockType,
-                    sourceId: input.itemId,
-                    metadata: {
-                        title: input.title,
-                        evidenceType: evidence.evidenceType,
-                    },
-                });
-            }
         }
         return {
             status: 200,
@@ -91,17 +79,6 @@ class PracticeService {
         });
         const attempt = saved.attempt;
         if (saved.created) {
-            await this.learningService?.recordListeningAttemptEvidence({
-                userId: input.userId,
-                exerciseId: input.exerciseId,
-                competencyIds: input.competencyIds,
-                comprehensionCorrect: Boolean(input.comprehensionCorrect),
-                translationOpened: Boolean(input.translationOpened),
-                transcriptOpened: Boolean(input.transcriptOpened),
-                slowAudioUsed: Boolean(input.slowAudioUsed),
-                replayCount: Math.max(0, Number(input.replayCount ?? 0)),
-                unknownWords: Array.isArray(input.unknownWords) ? input.unknownWords : [],
-            });
             await this.dailyPlanService?.recordBlockEvidence({
                 userId: input.userId,
                 blockType: "listening",

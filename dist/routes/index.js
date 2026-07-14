@@ -37,7 +37,7 @@ const handleSpeakingCoachUpload = (request, response, next) => {
         });
     });
 };
-const buildRouter = (contentController, audioController, authController, conversationController, reviewController, onboardingController, dailyPlanController, learningController, aiController, practiceController, settingsController) => {
+const buildRouter = (contentController, audioController, authController, conversationController, reviewController, profilePlanController, dailyPlanController, aiController, practiceController, settingsController) => {
     const router = (0, express_1.Router)();
     router.get("/health", (_request, response) => {
         response.json({ status: "ok", service: "english-os-api" });
@@ -54,31 +54,10 @@ const buildRouter = (contentController, audioController, authController, convers
     router.get("/content/bootstrap", auth_middleware_1.requireAuth, contentController.getBootstrap);
     router.post("/conversations/reply", auth_middleware_1.requireAuth, conversationController.reply);
     router.post("/reviews/record", auth_middleware_1.requireAuth, reviewController.record);
-    router.post("/onboarding/plan", auth_middleware_1.requireAuth, onboardingController.createPlan);
+    router.post("/profile/plan", auth_middleware_1.requireAuth, profilePlanController.createPlan);
     router.get("/daily-plans/today", auth_middleware_1.requireAuth, dailyPlanController.getToday);
     router.post("/daily-plans/today/advance", auth_middleware_1.requireAuth, dailyPlanController.advanceToday);
     router.patch("/daily-plans/blocks/complete", auth_middleware_1.requireAuth, dailyPlanController.completeBlock);
-    router.get("/learning/roadmap", auth_middleware_1.requireAuth, learningController.roadmap);
-    router.get("/learning/levels", auth_middleware_1.requireAuth, learningController.levels);
-    router.get("/learning/levels/:level", auth_middleware_1.requireAuth, learningController.level);
-    router.get("/learning/competencies", auth_middleware_1.requireAuth, learningController.competencies);
-    router.get("/learning/competencies/:id", auth_middleware_1.requireAuth, learningController.competency);
-    router.get("/learning/units", auth_middleware_1.requireAuth, learningController.units);
-    router.get("/learning/units/:id", auth_middleware_1.requireAuth, learningController.unit);
-    router.get("/users/me/competency-profile", auth_middleware_1.requireAuth, learningController.competencyProfile);
-    router.get("/users/me/level-progress", auth_middleware_1.requireAuth, learningController.levelProgress);
-    router.get("/users/me/roadmap", auth_middleware_1.requireAuth, learningController.userRoadmap);
-    router.get("/users/me/daily-learning-context", auth_middleware_1.requireAuth, learningController.dailyLearningContext);
-    router.post("/users/me/diagnostic/start", auth_middleware_1.requireAuth, learningController.diagnosticStart);
-    router.post("/users/me/diagnostic/submit", auth_middleware_1.requireAuth, learningController.diagnosticSubmit);
-    router.post("/users/me/diagnostic/finish", auth_middleware_1.requireAuth, learningController.diagnosticFinish);
-    router.post("/learning/attempts", auth_middleware_1.requireAuth, learningController.learningAttempt);
-    router.post("/learning/competencies/:id/evidence", auth_middleware_1.requireAuth, learningController.evidence);
-    router.post("/learning/checkpoints/:id/start", auth_middleware_1.requireAuth, learningController.checkpointStart);
-    router.post("/learning/checkpoints/:id/submit", auth_middleware_1.requireAuth, learningController.checkpointSubmit);
-    router.post("/learning/checkpoints/:id/finish", auth_middleware_1.requireAuth, learningController.checkpointFinish);
-    router.post("/users/me/daily-plan/generate", auth_middleware_1.requireAuth, learningController.generateDailyPlan);
-    router.post("/users/me/daily-plan/refine", auth_middleware_1.requireAuth, learningController.refineDailyPlan);
     router.post("/ai/conversation", auth_middleware_1.requireAuth, aiController.conversation);
     router.post("/ai/dev-mode", auth_middleware_1.requireAuth, aiController.devMode);
     router.post("/ai/think-in-english", auth_middleware_1.requireAuth, aiController.thinkInEnglish);

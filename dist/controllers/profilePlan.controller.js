@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OnboardingController = void 0;
-class OnboardingController {
-    constructor(onboardingService) {
-        this.onboardingService = onboardingService;
+exports.ProfilePlanController = void 0;
+class ProfilePlanController {
+    constructor(profilePlanService) {
+        this.profilePlanService = profilePlanService;
         this.createPlan = async (request, response) => {
             if (!request.auth?.userId) {
                 response.status(401).json({ message: "Authentication required" });
@@ -11,10 +11,10 @@ class OnboardingController {
             }
             const { name, objective, level, dailyMinutes, profession, professionalFocusMode, difficulty } = request.body;
             if (!name || !objective || !level || !dailyMinutes || !profession || !difficulty) {
-                response.status(400).json({ message: "Missing onboarding fields" });
+                response.status(400).json({ message: "Missing profile plan fields" });
                 return;
             }
-            const result = await this.onboardingService.buildPlan(request.auth.userId, {
+            const result = await this.profilePlanService.buildPlan(request.auth.userId, {
                 name,
                 objective,
                 level: level,
@@ -27,4 +27,4 @@ class OnboardingController {
         };
     }
 }
-exports.OnboardingController = OnboardingController;
+exports.ProfilePlanController = ProfilePlanController;

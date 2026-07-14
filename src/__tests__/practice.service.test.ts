@@ -2,7 +2,6 @@ import { describe, expect, it, jest } from "@jest/globals";
 import { PracticeRepository } from "../repositories/practice.repository";
 import { PracticeService } from "../services/practice.service";
 import { DailyPlanService } from "../services/dailyPlan.service";
-import { LearningService } from "../services/learning.service";
 
 const buildActivity = () => ({
   _id: "activity-1",
@@ -32,7 +31,7 @@ describe("PracticeService idempotency", () => {
     const dailyPlanService = {
       recordBlockEvidence: jest.fn(),
     } as unknown as DailyPlanService;
-    const service = new PracticeService(repository, undefined, dailyPlanService);
+    const service = new PracticeService(repository, dailyPlanService);
 
     const result = await service.completeActivity({
       userId: "user-1",
@@ -56,7 +55,7 @@ describe("PracticeService idempotency", () => {
     const dailyPlanService = {
       recordBlockEvidence: jest.fn(),
     } as unknown as DailyPlanService;
-    const service = new PracticeService(repository, undefined, dailyPlanService);
+    const service = new PracticeService(repository, dailyPlanService);
 
     const result = await service.completeActivity({
       userId: "user-1",
@@ -70,20 +69,17 @@ describe("PracticeService idempotency", () => {
     expect(dailyPlanService.recordBlockEvidence).toHaveBeenCalledTimes(1);
   });
 
-  it("does not record learning or daily-plan evidence again for an existing listening attempt", async () => {
+  it("does not record daily-plan evidence again for an existing listening attempt", async () => {
     const repository = {
       saveListeningAttempt: jest.fn(async () => ({
         attempt: buildAttempt(),
         created: false,
       })),
     } as unknown as PracticeRepository;
-    const learningService = {
-      recordListeningAttemptEvidence: jest.fn(),
-    } as unknown as LearningService;
     const dailyPlanService = {
       recordBlockEvidence: jest.fn(),
     } as unknown as DailyPlanService;
-    const service = new PracticeService(repository, learningService, dailyPlanService);
+    const service = new PracticeService(repository, dailyPlanService);
 
     const result = await service.saveListeningAttempt({
       userId: "user-1",
@@ -94,7 +90,6 @@ describe("PracticeService idempotency", () => {
 
     expect(result.status).toBe(200);
     expect(result.body.alreadyCompleted).toBe(true);
-    expect(learningService.recordListeningAttemptEvidence).not.toHaveBeenCalled();
     expect(dailyPlanService.recordBlockEvidence).not.toHaveBeenCalled();
   });
 });

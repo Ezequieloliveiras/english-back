@@ -34,10 +34,6 @@ const dailyPlanSchema = new mongoose_1.Schema({
     date: { type: String, required: true },
     status: { type: String, required: true, default: "not_started" },
     completedAt: { type: String, default: null },
-    learningUnitId: { type: String },
-    scenario: { type: String },
-    targetCompetencies: { type: [String], required: true, default: [] },
-    targetChunks: { type: [String], required: true, default: [] },
     blocks: { type: [studyBlockSchema], required: true },
 }, { timestamps: true });
 exports.DailyPlanModel = (0, mongoose_1.model)("DailyPlan", dailyPlanSchema);

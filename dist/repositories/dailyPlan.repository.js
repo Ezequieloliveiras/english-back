@@ -49,10 +49,6 @@ const mapPlan = (plan) => ({
     date: plan.date,
     status: plan.status ?? "not_started",
     completedAt: plan.completedAt ?? null,
-    learningUnitId: plan.learningUnitId,
-    scenario: plan.scenario,
-    targetCompetencies: plan.targetCompetencies ?? [],
-    targetChunks: plan.targetChunks ?? [],
     blocks: plan.blocks.map(mapBlock),
 });
 const mapUser = (user) => ({
@@ -167,10 +163,6 @@ class DailyPlanRepository {
                 date: plan.date,
                 status: plan.status ?? "not_started",
                 completedAt: plan.completedAt ?? null,
-                learningUnitId: plan.learningUnitId,
-                scenario: plan.scenario,
-                targetCompetencies: plan.targetCompetencies ?? [],
-                targetChunks: plan.targetChunks ?? [],
                 blocks: plan.blocks,
             },
         }, { new: true, upsert: true });

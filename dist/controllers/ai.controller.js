@@ -25,10 +25,9 @@ const validateUserMessage = (body, response) => {
     return true;
 };
 class AiController {
-    constructor(openAiService, dailyPlanService, learningService) {
+    constructor(openAiService, dailyPlanService) {
         this.openAiService = openAiService;
         this.dailyPlanService = dailyPlanService;
-        this.learningService = learningService;
         this.conversation = async (request, response) => {
             try {
                 if (!request.auth?.userId)
@@ -170,20 +169,6 @@ class AiController {
                     blockType: "speaking-coach",
                     evidenceType: "pronunciation_analysis",
                     evidenceRef: targetPhrase.trim(),
-                });
-                await this.learningService?.recordPracticeCompletionEvidence({
-                    userId: request.auth.userId,
-                    moduleType: "speaking-coach",
-                    sourceId: targetPhrase.trim(),
-                    score: Math.round(result.overallScore * 10),
-                    metadata: {
-                        targetPhrase: targetPhrase.trim(),
-                        transcript: result.transcript,
-                        overallScore: result.overallScore,
-                        metrics: result.metrics,
-                        comparison: result.comparison,
-                        audioQuality: result.audioQuality,
-                    },
                 });
                 console.info("[ai:speaking-coach] response sent", {
                     requestId,

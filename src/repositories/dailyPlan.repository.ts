@@ -50,10 +50,6 @@ const mapPlan = (plan: any): DailyPlan => ({
   date: plan.date,
   status: plan.status ?? "not_started",
   completedAt: plan.completedAt ?? null,
-  learningUnitId: plan.learningUnitId,
-  scenario: plan.scenario,
-  targetCompetencies: plan.targetCompetencies ?? [],
-  targetChunks: plan.targetChunks ?? [],
   blocks: plan.blocks.map(mapBlock),
 });
 
@@ -193,10 +189,6 @@ export class DailyPlanRepository {
           date: plan.date,
           status: plan.status ?? "not_started",
           completedAt: plan.completedAt ?? null,
-          learningUnitId: plan.learningUnitId,
-          scenario: plan.scenario,
-          targetCompetencies: plan.targetCompetencies ?? [],
-          targetChunks: plan.targetChunks ?? [],
           blocks: plan.blocks,
         },
       },

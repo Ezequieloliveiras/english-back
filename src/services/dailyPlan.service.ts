@@ -1,5 +1,4 @@
 import { DailyPlanRepository } from "../repositories/dailyPlan.repository";
-import { learningUnits } from "../data/learningRoadmap";
 import {
   DailyPlanStep,
   DailyPlan,
@@ -183,11 +182,7 @@ const levelBoost: Partial<Record<EnglishLevel, Partial<Record<StudyBlockType, nu
 
 const normalizeLevel = (level: string): EnglishLevel => {
   const value = level.toUpperCase();
-  if (["A1.1", "A1.2", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2"].includes(value)) {
-    return value as EnglishLevel;
-  }
-
-  return ["A1", "A2", "B1", "B2", "C1"].includes(value) ? (value as EnglishLevel) : "A1.1";
+  return ["A1", "A2", "B1", "B2", "C1"].includes(value) ? (value as EnglishLevel) : "A1";
 };
 
 const normalizeDifficulty = (difficulty: string): UserProfile["mainDifficulty"] => {
@@ -263,19 +258,7 @@ const buildFocus = (profile: UserProfile) => {
   return `${focusByDifficulty[profile.mainDifficulty]} Goal: ${profile.primaryGoal}`;
 };
 
-const levelBand = (level: EnglishLevel) => level.slice(0, 2);
-
-const selectLearningUnit = (level: EnglishLevel, rotation: number) => {
-  const exact = learningUnits.filter((unit) => unit.level === level && unit.status === "published");
-  const byBand = learningUnits.filter((unit) => unit.level.startsWith(levelBand(level)) && unit.status === "published");
-  const available = exact.length ? exact : byBand.length ? byBand : learningUnits.filter((unit) => unit.status === "published");
-
-  if (!available.length) {
-    return null;
-  }
-
-  return available[Math.abs(rotation) % available.length];
-};
+const levelBand = (level: EnglishLevel) => level;
 
 const distributeMinutes = (totalMinutes: number, weights: Record<StudyBlockType, number>) => {
   const blockTypes = Object.keys(weights) as StudyBlockType[];
@@ -336,7 +319,6 @@ export class DailyPlanService {
   generatePlan(profile: UserProfile, date = todayKey(), rotation = 0): Omit<DailyPlan, "id"> {
     const level = normalizeLevel(profile.currentLevel);
     const difficulty = normalizeDifficulty(profile.mainDifficulty);
-    const learningUnit = selectLearningUnit(level, rotation);
     let weights = { ...baseWeights };
 
     weights = applyBoost(weights, difficultyBoost[difficulty]);
@@ -370,18 +352,12 @@ export class DailyPlanService {
 
     return {
       userId: profile.id,
-      focus: learningUnit
-        ? `${learningUnit.title}: ${learningUnit.scenario}`
-        : buildFocus({ ...profile, currentLevel: level, mainDifficulty: difficulty }),
+      focus: buildFocus({ ...profile, currentLevel: level, mainDifficulty: difficulty }),
       totalMinutes: blocks.reduce((sum, block) => sum + block.durationMinutes, 0),
       streak: 0,
       date,
       status: "not_started",
       completedAt: null,
-      learningUnitId: learningUnit?.id,
-      scenario: learningUnit?.scenario,
-      targetCompetencies: learningUnit?.competencies ?? [],
-      targetChunks: learningUnit?.vocabularyChunks ?? [],
       blocks,
     };
   }

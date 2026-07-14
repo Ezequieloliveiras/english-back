@@ -9,6 +9,7 @@ const seedData_1 = require("../data/seedData");
 const contentCatalog_model_1 = require("../models/contentCatalog.model");
 const reviewSchedule_model_1 = require("../models/reviewSchedule.model");
 const vocabularyItem_model_1 = require("../models/vocabularyItem.model");
+const trainingPhrase_1 = require("../utils/trainingPhrase");
 const planBlockOrder = [
     "shadowing",
     "speaking-coach",
@@ -298,14 +299,25 @@ const buildPlanScenario = (user, dailyPlan) => {
 const chunkByPhrase = (text, translation) => {
     const words = text.replace(/[?.!]/g, "").split(/\s+/).filter(Boolean);
     if (words.length <= 4) {
-        return [{ text, meaning: translation }];
+        return [{ text, translation: translation }];
     }
     const middle = Math.ceil(words.length / 2);
     return [
-        { text: words.slice(0, middle).join(" "), meaning: translation },
-        { text: words.slice(middle).join(" "), meaning: "parte final da ideia" },
+        { text: words.slice(0, middle).join(" "), translation: translation },
+        { text: words.slice(middle).join(" "), translation: "parte final da ideia" },
     ];
 };
+const buildShadowingItem = (item) => ({
+    id: item.id,
+    text: item.text,
+    translation: item.translation,
+    explanation: item.explanation ?? `Use esta frase em uma situação prática: ${item.translation}`,
+    chunks: item.chunks ?? chunkByPhrase(item.text, item.translation),
+    pronunciationTip: item.pronunciationTip,
+    language: "en",
+    translationLanguage: "pt-BR",
+    ...(item.additionalExample ? { additionalExample: item.additionalExample } : {}),
+});
 const translateGeneratedPhrase = (phrase, area) => {
     const translations = {
         "I can explain the next step in simple English.": "Eu consigo explicar o próximo passo em inglês simples.",
@@ -352,7 +364,7 @@ const buildPlanListeningLesson = (user, dailyPlan) => {
             const translation = scenario.translations[index] ?? "Tradução em português indisponível.";
             return {
                 sourceText: text,
-                naturalTranslation: translation,
+                translation,
                 translationPtBr: translation,
                 context: "Use esta frase como parte do ciclo atual de estudo.",
                 chunks: chunkByPhrase(text, translation),
@@ -367,47 +379,49 @@ const buildPlanShadowingItems = (user, dailyPlan) => {
     const profile = professionalProfile(user);
     const sets = [
         [
-            {
+            buildShadowingItem({
                 id: `plan-shadowing-${dailyPlan.date}-${rotation}-1`,
-                phrase: profile.phrases[0],
-                naturalTranslation: translateGeneratedPhrase(profile.phrases[0], profile.area),
-                pronunciationHint: "Destaque o termo profissional principal e mantenha o final claro.",
-                context: `Use em atualizações de ${profile.area}.`,
+                text: profile.phrases[0],
+                translation: translateGeneratedPhrase(profile.phrases[0], profile.area),
+                pronunciationTip: "Destaque o termo profissional principal e mantenha o final claro.",
+                explanation: `Use em atualizações de ${profile.area}.`,
                 chunks: chunkByPhrase(profile.phrases[0], translateGeneratedPhrase(profile.phrases[0], profile.area)),
-            },
-            {
+            }),
+            buildShadowingItem({
                 id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
-                phrase: profile.enabled ? profile.phrases[1] : goal.englishGoalSentence,
-                naturalTranslation: profile.enabled
+                text: profile.enabled ? profile.phrases[1] : goal.englishGoalSentence,
+                translation: profile.enabled
                     ? translateGeneratedPhrase(profile.phrases[1], profile.area)
                     : goal.portugueseGoalSentence,
-                pronunciationHint: "Faça uma pausa breve depois da ideia principal e termine com confiança.",
+                pronunciationTip: "Faça uma pausa breve depois da ideia principal e termine com confiança.",
                 chunks: chunkByPhrase(profile.enabled ? profile.phrases[1] : goal.englishGoalSentence, profile.enabled ? translateGeneratedPhrase(profile.phrases[1], profile.area) : goal.portugueseGoalSentence),
-            },
+            }),
         ],
         [
-            {
+            buildShadowingItem({
                 id: `plan-shadowing-${dailyPlan.date}-${rotation}-1`,
-                phrase: "I need to confirm the priority before I continue.",
-                naturalTranslation: "Eu preciso confirmar a prioridade antes de continuar.",
-                pronunciationHint: "Connect 'need to' naturally, close to 'needta'.",
+                text: "I need to confirm the priority before I continue.",
+                translation: "Eu preciso confirmar a prioridade antes de continuar.",
+                explanation: "Use quando você precisa confirmar prioridade antes de seguir com uma tarefa.",
+                pronunciationTip: "Conecte 'need to' naturalmente, próximo de 'needta'.",
                 chunks: [
-                    { text: "I need to confirm", meaning: "Eu preciso confirmar" },
-                    { text: "the priority", meaning: "a prioridade" },
-                    { text: "before I continue", meaning: "antes de continuar" },
+                    { text: "I need to confirm", translation: "Eu preciso confirmar" },
+                    { text: "the priority", translation: "a prioridade" },
+                    { text: "before I continue", translation: "antes de continuar" },
                 ],
-            },
-            {
+            }),
+            buildShadowingItem({
                 id: `plan-shadowing-${dailyPlan.date}-${rotation}-2`,
-                phrase: "Could you give me one example, please?",
-                naturalTranslation: "Você poderia me dar um exemplo, por favor?",
-                pronunciationHint: "Reduce 'could you' and stress 'one example'.",
+                text: "Could you give me one example, please?",
+                translation: "Você poderia me dar um exemplo, por favor?",
+                explanation: "Use quando você precisa de um exemplo para entender melhor.",
+                pronunciationTip: "Reduza 'could you' e dê ênfase a 'one example'.",
                 chunks: [
-                    { text: "Could you give me", meaning: "Você poderia me dar" },
-                    { text: "one example", meaning: "um exemplo" },
-                    { text: "please", meaning: "por favor" },
+                    { text: "Could you give me", translation: "Você poderia me dar" },
+                    { text: "one example", translation: "um exemplo" },
+                    { text: "please", translation: "por favor" },
                 ],
-            },
+            }),
         ],
     ];
     return sets[rotation % sets.length];
@@ -499,6 +513,21 @@ const hydrateListeningLessons = (lessons = []) => {
         };
     });
 };
+const hydrateShadowingItems = (items = []) => {
+    const seedById = new Map(seedData_1.dashboardSeed.shadowingItems.map((item) => [item.id, item]));
+    const seedByText = new Map(seedData_1.dashboardSeed.shadowingItems.map((item) => [item.text, item]));
+    return items
+        .map((item) => {
+        const text = typeof item?.text === "string" ? item.text : item?.phrase;
+        const fallback = seedById.get(item?.id) ?? seedByText.get(text) ?? undefined;
+        const normalized = (0, trainingPhrase_1.normalizeShadowingItem)(item, fallback);
+        if (!normalized?.translation) {
+            return null;
+        }
+        return normalized;
+    })
+        .filter((item) => Boolean(item));
+};
 class ContentRepository {
     async seedCatalogIfNeeded() {
         const [vocabularyCount, catalogCount] = await Promise.all([
@@ -545,7 +574,7 @@ class ContentRepository {
         return {
             vocabulary: vocabulary.map(toPlainVocabulary),
             listeningLessons: hydrateListeningLessons(byKey.get("listeningLessons") ?? seedData_1.dashboardSeed.listeningLessons),
-            shadowingItems: byKey.get("shadowingItems") ?? [],
+            shadowingItems: hydrateShadowingItems(byKey.get("shadowingItems") ?? seedData_1.dashboardSeed.shadowingItems),
             conversationModes: byKey.get("conversationModes") ?? [],
             developerModes: byKey.get("developerModes") ?? [],
             thinkInEnglishPrompts: byKey.get("thinkInEnglishPrompts") ?? [],
@@ -565,7 +594,7 @@ class ContentRepository {
             shadowingItems: uniqueBy([
                 ...buildPlanShadowingItems(user, dailyPlan),
                 ...rotateItems(content.shadowingItems, rotation),
-            ], (item) => item.phrase),
+            ], (item) => item.text),
             conversationModes: rotateItems(content.conversationModes, rotation),
             developerModes: rotateItems(content.developerModes, rotation),
             thinkInEnglishPrompts: [

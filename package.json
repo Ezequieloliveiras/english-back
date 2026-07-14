@@ -7,7 +7,8 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "backfill:training-phrases": "npm run build && node dist/scripts/backfillTrainingPhrases.js"
   },
   "keywords": [],
   "author": "",

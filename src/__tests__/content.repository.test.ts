@@ -62,7 +62,7 @@ describe("ContentRepository.personalizeForPlan", () => {
     expect(generatedLesson.dialogue.join(" ")).toContain("meetings and interviews");
     expect(generatedLesson.dialogue.join(" ")).not.toMatch(/falar|reuniões|entrevistas/i);
     expect(comprehension[1].translationPtBr).toContain("reuniões e entrevistas");
-    expect(generatedShadowing.phrase).toContain("meetings and interviews");
+    expect(generatedShadowing.text).toContain("meetings and interviews");
   });
 
   it("keeps shadowing support copy in Portuguese while the practice phrase stays English", () => {
@@ -88,10 +88,10 @@ describe("ContentRepository.personalizeForPlan", () => {
 
     const generatedShadowing = result.shadowingItems[0];
 
-    expect(generatedShadowing.phrase).toBe("The layout should make the main action clearer.");
-    expect(generatedShadowing.naturalTranslation).toBe("O layout deve deixar a ação principal mais clara.");
-    expect(generatedShadowing.context).toBe("Use em atualizações de design.");
-    expect(generatedShadowing.pronunciationHint).toBe(
+    expect(generatedShadowing.text).toBe("The layout should make the main action clearer.");
+    expect(generatedShadowing.translation).toBe("O layout deve deixar a ação principal mais clara.");
+    expect(generatedShadowing.explanation).toBe("Use em atualizações de design.");
+    expect(generatedShadowing.pronunciationTip).toBe(
       "Destaque o termo profissional principal e mantenha o final claro."
     );
   });

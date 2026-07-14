@@ -186,7 +186,7 @@ export interface ListeningQuestion {
 
 export interface PhraseMeaningChunk {
   text: string;
-  meaning: string;
+  translation: string;
 }
 
 export interface TimedWord {
@@ -198,17 +198,14 @@ export interface TimedWord {
 export interface ComprehensiblePhraseDetails {
   sourceText?: string;
   audioUrl?: string;
-  naturalTranslation?: string;
   translation?: string;
-  translatedText?: string;
   translationPtBr?: string;
-  portugueseText?: string;
   words?: TimedWord[];
   chunks?: PhraseMeaningChunk[];
   context?: string;
   importantWords?: Array<{
     text: string;
-    meaning: string;
+    translation: string;
   }>;
   pronunciationTip?: string;
   additionalExample?: string;
@@ -230,17 +227,20 @@ export interface ListeningLesson {
 
 export interface ShadowingItem {
   id: string;
-  phrase: string;
-  pronunciationHint: string;
+  text: string;
+  translation: string | null;
+  explanation: string | null;
+  pronunciationTip: string;
+  language: "en";
+  translationLanguage: "pt-BR" | null;
   audioUrl?: string;
+  words?: TimedWord[];
   naturalTranslation?: string;
   chunks?: PhraseMeaningChunk[];
-  context?: string;
   importantWords?: Array<{
     text: string;
-    meaning: string;
+    translation: string;
   }>;
-  pronunciationTip?: string;
   additionalExample?: string;
   slowPrompt?: string;
 }

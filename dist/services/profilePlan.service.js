@@ -140,8 +140,9 @@ const validateProfessionalFocus = (profession, mode) => {
     };
 };
 class ProfilePlanService {
-    constructor(dailyPlanService) {
+    constructor(dailyPlanService, userGoalRepository) {
         this.dailyPlanService = dailyPlanService;
+        this.userGoalRepository = userGoalRepository;
     }
     async buildPlan(userId, input) {
         const level = input.level.toUpperCase();
@@ -173,6 +174,11 @@ class ProfilePlanService {
             initialSetupCompleted: true,
         };
         const { dailyPlan, progress, user } = await this.dailyPlanService.createPlanForProfile(userId, profile);
+        await this.userGoalRepository?.upsertGoal(userId, {
+            primaryGoal: input.objective,
+            targetLevel: level,
+            professionalContext: input.profession,
+        });
         return {
             status: 201,
             body: {

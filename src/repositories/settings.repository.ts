@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import { UserModel } from "../models/user.model";
 import { UserSettingsModel } from "../models/userSettings.model";
+import { UserGoalRepository } from "./userGoal.repository";
+import { EnglishLevel } from "../types";
 
 export type LanguageMode = "pt_explanation_en_correction" | "full_english";
 export type SupportLanguageMode =
@@ -35,6 +37,9 @@ export interface UserSettings {
   correctionStyle: CorrectionStyle;
   interfaceLanguage: "pt-BR" | "en";
   primaryObjective: PrimaryObjective;
+  goalType?: PrimaryObjective;
+  goalDescription?: string;
+  targetLevel?: EnglishLevel;
   dailyMinutes: number;
   createdAt?: string;
   updatedAt?: string;
@@ -51,6 +56,9 @@ const defaultSettings = (userId: string): UserSettings => ({
   correctionStyle: "gentle",
   interfaceLanguage: "pt-BR",
   primaryObjective: "conversation",
+  goalType: "conversation",
+  goalDescription: "",
+  targetLevel: "B1",
   dailyMinutes: 20,
 });
 
@@ -65,6 +73,9 @@ const mapSettings = (settings: any): UserSettings => ({
   correctionStyle: settings.correctionStyle,
   interfaceLanguage: settings.interfaceLanguage,
   primaryObjective: settings.primaryObjective,
+  goalType: settings.goalType ?? settings.primaryObjective,
+  goalDescription: settings.goalDescription ?? "",
+  targetLevel: settings.targetLevel ?? "B1",
   dailyMinutes: settings.dailyMinutes,
   createdAt: settings.createdAt?.toISOString?.(),
   updatedAt: settings.updatedAt?.toISOString?.(),
@@ -119,11 +130,33 @@ const coerceSettings = (userId: string, input: Partial<UserSettings>): UserSetti
       input.primaryObjective === "conversation"
         ? input.primaryObjective
         : base.primaryObjective,
+    goalType:
+      input.goalType === "interview" ||
+      input.goalType === "work" ||
+      input.goalType === "travel" ||
+      input.goalType === "technical_english" ||
+      input.goalType === "conversation"
+        ? input.goalType
+        : input.primaryObjective ?? base.goalType,
+    goalDescription:
+      typeof input.goalDescription === "string"
+        ? input.goalDescription.trim()
+        : base.goalDescription,
+    targetLevel:
+      input.targetLevel === "A1" ||
+      input.targetLevel === "A2" ||
+      input.targetLevel === "B1" ||
+      input.targetLevel === "B2" ||
+      input.targetLevel === "C1"
+        ? input.targetLevel
+        : base.targetLevel,
     dailyMinutes: Math.max(10, Math.min(45, Number(input.dailyMinutes ?? base.dailyMinutes))),
   };
 };
 
 export class SettingsRepository {
+  constructor(private readonly userGoalRepository?: UserGoalRepository) {}
+
   async findOrCreate(userId: string) {
     if (!isDatabaseReady()) {
       const existing = memorySettings.get(userId);
@@ -162,9 +195,14 @@ export class SettingsRepository {
     await UserModel.findByIdAndUpdate(userId, {
       $set: {
         dailyMinutes: next.dailyMinutes,
-        primaryGoal: next.primaryObjective,
       },
     });
+    if (next.goalDescription) {
+      await this.userGoalRepository?.upsertGoal(userId, {
+        primaryGoal: next.goalDescription,
+        targetLevel: next.targetLevel ?? "B1",
+      });
+    }
 
     return mapSettings(updated);
   }

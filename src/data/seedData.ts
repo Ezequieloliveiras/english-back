@@ -380,7 +380,7 @@ export const dashboardSeed: DashboardPayload = {
   },
   goal: {
     id: "goal-1",
-    label: "Reach confident B1 speaking for work",
+    label: "Speak naturally in meetings and technical conversations",
     targetLevel: "B1",
     progress: 0,
   },

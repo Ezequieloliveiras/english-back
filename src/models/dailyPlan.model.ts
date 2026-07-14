@@ -41,6 +41,13 @@ const dailyPlanSchema = new Schema(
     date: { type: String, required: true },
     status: { type: String, required: true, default: "not_started" },
     completedAt: { type: String, default: null },
+    generationMethod: {
+      type: String,
+      required: true,
+      default: "heuristic",
+      enum: ["heuristic", "ai", "hybrid"],
+    },
+    generationReason: { type: String, required: true, default: "Generated from profile level, goal, difficulty, profession and available minutes." },
     blocks: { type: [studyBlockSchema], required: true },
   },
   { timestamps: true }

@@ -17,6 +17,9 @@ const defaultSettings = (userId) => ({
     correctionStyle: "gentle",
     interfaceLanguage: "pt-BR",
     primaryObjective: "conversation",
+    goalType: "conversation",
+    goalDescription: "",
+    targetLevel: "B1",
     dailyMinutes: 20,
 });
 const memorySettings = new Map();
@@ -29,6 +32,9 @@ const mapSettings = (settings) => ({
     correctionStyle: settings.correctionStyle,
     interfaceLanguage: settings.interfaceLanguage,
     primaryObjective: settings.primaryObjective,
+    goalType: settings.goalType ?? settings.primaryObjective,
+    goalDescription: settings.goalDescription ?? "",
+    targetLevel: settings.targetLevel ?? "B1",
     dailyMinutes: settings.dailyMinutes,
     createdAt: settings.createdAt?.toISOString?.(),
     updatedAt: settings.updatedAt?.toISOString?.(),
@@ -75,10 +81,30 @@ const coerceSettings = (userId, input) => {
             input.primaryObjective === "conversation"
             ? input.primaryObjective
             : base.primaryObjective,
+        goalType: input.goalType === "interview" ||
+            input.goalType === "work" ||
+            input.goalType === "travel" ||
+            input.goalType === "technical_english" ||
+            input.goalType === "conversation"
+            ? input.goalType
+            : input.primaryObjective ?? base.goalType,
+        goalDescription: typeof input.goalDescription === "string"
+            ? input.goalDescription.trim()
+            : base.goalDescription,
+        targetLevel: input.targetLevel === "A1" ||
+            input.targetLevel === "A2" ||
+            input.targetLevel === "B1" ||
+            input.targetLevel === "B2" ||
+            input.targetLevel === "C1"
+            ? input.targetLevel
+            : base.targetLevel,
         dailyMinutes: Math.max(10, Math.min(45, Number(input.dailyMinutes ?? base.dailyMinutes))),
     };
 };
 class SettingsRepository {
+    constructor(userGoalRepository) {
+        this.userGoalRepository = userGoalRepository;
+    }
     async findOrCreate(userId) {
         if (!isDatabaseReady()) {
             const existing = memorySettings.get(userId);
@@ -103,9 +129,14 @@ class SettingsRepository {
         await user_model_1.UserModel.findByIdAndUpdate(userId, {
             $set: {
                 dailyMinutes: next.dailyMinutes,
-                primaryGoal: next.primaryObjective,
             },
         });
+        if (next.goalDescription) {
+            await this.userGoalRepository?.upsertGoal(userId, {
+                primaryGoal: next.goalDescription,
+                targetLevel: next.targetLevel ?? "B1",
+            });
+        }
         return mapSettings(updated);
     }
 }

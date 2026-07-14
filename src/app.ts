@@ -20,7 +20,9 @@ import { AiRepository } from "./repositories/ai.repository";
 import { AudioCacheRepository } from "./repositories/audioCache.repository";
 import { DailyPlanRepository } from "./repositories/dailyPlan.repository";
 import { PracticeRepository } from "./repositories/practice.repository";
+import { ProgressRepository } from "./repositories/progress.repository";
 import { SettingsRepository } from "./repositories/settings.repository";
+import { UserGoalRepository } from "./repositories/userGoal.repository";
 import { buildRouter } from "./routes";
 import { AudioService } from "./services/audio.service";
 import { AudioStorageService } from "./services/audioStorage.service";
@@ -30,6 +32,7 @@ import { ConversationService } from "./services/conversation.service";
 import { DailyPlanService } from "./services/dailyPlan.service";
 import { OpenAiService } from "./services/openai.service";
 import { PracticeService } from "./services/practice.service";
+import { ProgressService } from "./services/progress.service";
 import { ProfilePlanService } from "./services/profilePlan.service";
 import { ReviewService } from "./services/review.service";
 import { SettingsService } from "./services/settings.service";
@@ -40,7 +43,9 @@ const aiRepository = new AiRepository();
 const audioCacheRepository = new AudioCacheRepository();
 const dailyPlanRepository = new DailyPlanRepository();
 const practiceRepository = new PracticeRepository();
-const settingsRepository = new SettingsRepository();
+const progressRepository = new ProgressRepository();
+const userGoalRepository = new UserGoalRepository();
+const settingsRepository = new SettingsRepository(userGoalRepository);
 
 const audioStorageService = new AudioStorageService();
 const audioService = new AudioService(
@@ -49,20 +54,23 @@ const audioService = new AudioService(
 );
 const authService = new AuthService(authRepository);
 const settingsService = new SettingsService(settingsRepository);
-const openAiService = new OpenAiService(aiRepository, settingsRepository);
-const dailyPlanService = new DailyPlanService(dailyPlanRepository);
+const progressService = new ProgressService(progressRepository);
+const openAiService = new OpenAiService(aiRepository, settingsRepository, progressService);
+const dailyPlanService = new DailyPlanService(dailyPlanRepository, progressService);
 const conversationService = new ConversationService(openAiService, dailyPlanService);
-const reviewService = new ReviewService(contentRepository, dailyPlanService);
+const reviewService = new ReviewService(contentRepository, dailyPlanService, progressService);
 const contentService = new ContentService(
   contentRepository,
   dailyPlanService,
   settingsRepository,
   aiRepository,
-  practiceRepository
+  practiceRepository,
+  progressService,
+  userGoalRepository
 );
 
-const profilePlanService = new ProfilePlanService(dailyPlanService);
-const practiceService = new PracticeService(practiceRepository, dailyPlanService);
+const profilePlanService = new ProfilePlanService(dailyPlanService, userGoalRepository);
+const practiceService = new PracticeService(practiceRepository, dailyPlanService, progressService);
 
 const contentController = new ContentController(contentService);
 const audioController = new AudioController(audioService);

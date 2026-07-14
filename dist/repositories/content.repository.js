@@ -516,6 +516,7 @@ class ContentRepository {
                 nextReviewAt: new Date(item.nextReviewAt),
                 hits: item.hits,
                 misses: item.misses,
+                source: "global_catalog",
             })));
         }
         if (catalogCount === 0) {
@@ -531,7 +532,13 @@ class ContentRepository {
     async getLearningContent(userId) {
         await this.seedCatalogIfNeeded();
         const [vocabulary, catalogs] = await Promise.all([
-            vocabularyItem_model_1.VocabularyItemModel.find({ userId }).sort({ createdAt: -1 }),
+            vocabularyItem_model_1.VocabularyItemModel.find({
+                $or: [
+                    { userId },
+                    { userId: { $exists: false } },
+                    { userId: null, source: "global_catalog" },
+                ],
+            }).sort({ userId: -1, createdAt: -1 }),
             contentCatalog_model_1.ContentCatalogModel.find(),
         ]);
         const byKey = new Map(catalogs.map((catalog) => [catalog.key, catalog.items]));
@@ -605,7 +612,7 @@ class ContentRepository {
                 level: item.level,
                 category: item.category,
                 sentences: item.sentences,
-                source: item.source ?? "user_saved",
+                source: item.source === "global_catalog" ? "user_reviewed_global" : item.source ?? "user_saved",
             },
             $set: {
                 confidence: next.confidence,
@@ -617,7 +624,8 @@ class ContentRepository {
                 timesWrong: next.misses,
             },
         };
-        const saved = mongoose_1.default.Types.ObjectId.isValid(item.id)
+        const shouldUpdateById = mongoose_1.default.Types.ObjectId.isValid(item.id) && item.source !== "global_catalog";
+        const saved = shouldUpdateById
             ? await vocabularyItem_model_1.VocabularyItemModel.findByIdAndUpdate(item.id, update, { new: true })
             : await vocabularyItem_model_1.VocabularyItemModel.findOneAndUpdate({ userId, phrase: item.phrase }, update, { new: true, upsert: true, setDefaultsOnInsert: true });
         if (!saved) {

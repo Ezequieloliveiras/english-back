@@ -53,6 +53,8 @@ export interface DailyPlan {
   date: string;
   status?: "not_started" | "in_progress" | "completed";
   completedAt?: string | null;
+  generationMethod?: "heuristic" | "ai" | "hybrid";
+  generationReason?: string;
   blocks: StudyBlock[];
 }
 
@@ -72,6 +74,8 @@ export interface ProgressSnapshot {
   consistencyScore: number;
   studiedMinutesToday: number;
   streakDays: number;
+  completedBlocks?: number;
+  completedPlans?: number;
 }
 
 export interface UserProfile {
@@ -115,6 +119,9 @@ export interface UserSettings {
   correctionStyle: "gentle" | "direct" | "detailed";
   interfaceLanguage: "pt-BR" | "en";
   primaryObjective: "conversation" | "interview" | "work" | "travel" | "technical_english";
+  goalType?: "conversation" | "interview" | "work" | "travel" | "technical_english";
+  goalDescription?: string;
+  targetLevel?: EnglishLevel;
   dailyMinutes: number;
 }
 

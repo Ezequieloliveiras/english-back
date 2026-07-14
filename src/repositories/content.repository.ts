@@ -611,6 +611,7 @@ export class ContentRepository {
           nextReviewAt: new Date(item.nextReviewAt),
           hits: item.hits,
           misses: item.misses,
+          source: "global_catalog",
         }))
       );
     }
@@ -630,7 +631,13 @@ export class ContentRepository {
     await this.seedCatalogIfNeeded();
 
     const [vocabulary, catalogs] = await Promise.all([
-      VocabularyItemModel.find({ userId }).sort({ createdAt: -1 }),
+      VocabularyItemModel.find({
+        $or: [
+          { userId },
+          { userId: { $exists: false } },
+          { userId: null, source: "global_catalog" },
+        ],
+      }).sort({ userId: -1, createdAt: -1 }),
       ContentCatalogModel.find(),
     ]);
     const byKey = new Map(catalogs.map((catalog) => [catalog.key, catalog.items]));
@@ -721,7 +728,7 @@ export class ContentRepository {
         level: item.level,
         category: item.category,
         sentences: item.sentences,
-        source: item.source ?? "user_saved",
+        source: item.source === "global_catalog" ? "user_reviewed_global" : item.source ?? "user_saved",
       },
       $set: {
         confidence: next.confidence,
@@ -734,7 +741,8 @@ export class ContentRepository {
       },
     };
 
-    const saved = mongoose.Types.ObjectId.isValid(item.id)
+    const shouldUpdateById = mongoose.Types.ObjectId.isValid(item.id) && item.source !== "global_catalog";
+    const saved = shouldUpdateById
       ? await VocabularyItemModel.findByIdAndUpdate(item.id, update, { new: true })
       : await VocabularyItemModel.findOneAndUpdate(
           { userId, phrase: item.phrase },

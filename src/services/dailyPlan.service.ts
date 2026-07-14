@@ -3,11 +3,13 @@ import {
   DailyPlanStep,
   DailyPlan,
   EnglishLevel,
+  ProgressSnapshot,
   StudyBlock,
   StudyBlockType,
   StudyStatus,
   UserProfile,
 } from "../types";
+import { ProgressService } from "./progress.service";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -313,18 +315,60 @@ const applyBoost = (
   return next;
 };
 
-export class DailyPlanService {
-  constructor(private readonly dailyPlanRepository: DailyPlanRepository) {}
+type DailyPlanGenerationContext = {
+  progress?: ProgressSnapshot;
+};
 
-  generatePlan(profile: UserProfile, date = todayKey(), rotation = 0): Omit<DailyPlan, "id"> {
+const weakestSkillBoost = (progress?: ProgressSnapshot): {
+  boost: Partial<Record<StudyBlockType, number>>;
+  reason?: string;
+} => {
+  if (!progress) {
+    return { boost: {} };
+  }
+
+  const scores = [
+    { skill: "listening", score: progress.listeningScore, boost: { listening: 0.08, shadowing: 0.03 } },
+    { skill: "speaking", score: progress.speakingScore, boost: { conversation: 0.07, "speaking-coach": 0.04 } },
+    { skill: "vocabulary", score: progress.vocabularyScore, boost: { vocabulary: 0.08, review: 0.04 } },
+    { skill: "pronunciation", score: progress.pronunciationScore, boost: { "speaking-coach": 0.08, shadowing: 0.05 } },
+  ] as const;
+  const meaningful = scores.filter((entry) => entry.score > 0);
+
+  if (!meaningful.length) {
+    return { boost: {}, reason: "No skill history yet; used onboarding profile only." };
+  }
+
+  const weakest = [...meaningful].sort((a, b) => a.score - b.score)[0];
+
+  return {
+    boost: weakest.boost,
+    reason: `Added extra ${weakest.skill} weight because it is the weakest recent skill (${weakest.score}/100).`,
+  };
+};
+
+export class DailyPlanService {
+  constructor(
+    private readonly dailyPlanRepository: DailyPlanRepository,
+    private readonly progressService?: ProgressService
+  ) {}
+
+  generatePlan(
+    profile: UserProfile,
+    date = todayKey(),
+    rotation = 0,
+    context: DailyPlanGenerationContext = {}
+  ): Omit<DailyPlan, "id"> {
     const level = normalizeLevel(profile.currentLevel);
     const difficulty = normalizeDifficulty(profile.mainDifficulty);
     let weights = { ...baseWeights };
+    const weakSkill = weakestSkillBoost(context.progress);
 
     weights = applyBoost(weights, difficultyBoost[difficulty]);
     weights = applyBoost(weights, levelBoost[level] ?? levelBoost[levelBand(level) as EnglishLevel] ?? {});
     weights = applyBoost(weights, goalBoost(profile.primaryGoal));
     weights = applyBoost(weights, professionBoost(profile));
+    weights = applyBoost(weights, weakSkill.boost);
 
     const allocations = distributeMinutes(profile.dailyMinutes, weights);
     const rotationIndex = allocations.length ? Math.abs(rotation) % allocations.length : 0;
@@ -358,6 +402,11 @@ export class DailyPlanService {
       date,
       status: "not_started",
       completedAt: null,
+      generationMethod: "heuristic",
+      generationReason: [
+        `Generated deterministically from level ${level}, difficulty ${difficulty}, daily minutes, goal and professional context.`,
+        weakSkill.reason,
+      ].filter(Boolean).join(" "),
       blocks,
     };
   }
@@ -401,7 +450,7 @@ export class DailyPlanService {
     }
 
     const plan = await this.dailyPlanRepository.savePlan({
-      ...this.generatePlan(resolvedUser, date),
+      ...this.generatePlan(resolvedUser, date, 0, { progress }),
       streak: progress.streakDays,
     });
 
@@ -417,7 +466,7 @@ export class DailyPlanService {
 
     const progress = await this.dailyPlanRepository.findOrCreateProgress(user);
     const plan = await this.dailyPlanRepository.savePlan({
-      ...this.generatePlan(user),
+      ...this.generatePlan(user, todayKey(), 0, { progress }),
       streak: progress.streakDays,
     });
 
@@ -438,7 +487,7 @@ export class DailyPlanService {
     const currentIndex = currentFirstType ? blockTypeOrder.indexOf(currentFirstType) : -1;
     const rotation = currentIndex >= 0 ? currentIndex + 1 : 1;
     const plan = await this.dailyPlanRepository.savePlan({
-      ...this.generatePlan(resolvedUser, date, rotation),
+      ...this.generatePlan(resolvedUser, date, rotation, { progress }),
       streak: progress.streakDays,
     });
 
@@ -450,18 +499,76 @@ export class DailyPlanService {
     const plan = dailyPlan.id === planId ? dailyPlan : null;
 
     if (!plan) {
-      return null;
+      return { status: 404, body: { message: "Study block not found" } };
     }
 
     const block = plan.blocks.find((entry) => entry.id === blockId);
 
     if (!block) {
-      return null;
+      return { status: 404, body: { message: "Study block not found" } };
     }
 
-    const normalizedPlan = await this.persistNormalizedPlan(plan);
+    if (block.status === "completed") {
+      return {
+        status: 200,
+        body: { user, dailyPlan: plan, progress, alreadyCompleted: true },
+      };
+    }
 
-    return { user, dailyPlan: normalizedPlan, progress };
+    if (block.type === "speaking-coach") {
+      return {
+        status: 409,
+        body: {
+          message: "Speaking Coach blocks require a real pronunciation analysis before completion.",
+          requiredEvidenceType: "pronunciation_analysis",
+        },
+      };
+    }
+
+    const completedAt = new Date().toISOString();
+    const updatedBlock = calculateBlockProgress({
+      ...block,
+      requiredSteps: (block.requiredSteps ?? buildRequiredSteps(block.type)).map((step) => ({
+        ...step,
+        status: "completed",
+        completedAt: step.completedAt ?? completedAt,
+        evidenceType: step.evidenceType ?? "manual_completion",
+        evidenceRef: step.evidenceRef ?? block.id,
+      })),
+      startedAt: block.startedAt ?? completedAt,
+      completedAt,
+    });
+    const wasPlanCompleted = plan.status === "completed";
+    const updatedBlocks = plan.blocks.map((entry) => (entry.id === block.id ? updatedBlock : entry));
+    const planStatus = calculatePlanStatus({ ...plan, blocks: updatedBlocks });
+    const completedPlanNow = !wasPlanCompleted && planStatus.status === "completed";
+    const progressAfterCompletion = this.progressService
+      ? await this.progressService.recordBlockCompleted({
+          userId: user.id,
+          plan: { ...plan, ...planStatus, blocks: updatedBlocks },
+          block: updatedBlock,
+          previousProgress: progress,
+          completedPlanNow,
+        })
+      : await this.dailyPlanRepository.saveProgress(user.id, {
+          ...progress,
+          studiedMinutesToday: progress.studiedMinutesToday + block.durationMinutes,
+          streakDays: completedPlanNow ? progress.streakDays + 1 : progress.streakDays,
+          consistencyScore: Math.max(progress.consistencyScore, Math.round((updatedBlocks.filter((entry) => entry.status === "completed").length / updatedBlocks.length) * 100)),
+          completedBlocks: (progress.completedBlocks ?? 0) + 1,
+          completedPlans: (progress.completedPlans ?? 0) + (completedPlanNow ? 1 : 0),
+        });
+    const updatedPlan = await this.dailyPlanRepository.updatePlanBlocks({
+      ...plan,
+      ...planStatus,
+      streak: progressAfterCompletion.streakDays,
+      blocks: updatedBlocks,
+    });
+
+    return {
+      status: 200,
+      body: { user, dailyPlan: updatedPlan ?? plan, progress: progressAfterCompletion, alreadyCompleted: false },
+    };
   }
 
   async recordBlockEvidence(input: {
@@ -523,22 +630,34 @@ export class DailyPlanService {
       blocks: updatedBlocks,
     });
 
-    const studiedMinutesToday = wasCompleted
-      ? progress.studiedMinutesToday
-      : updatedBlock.status === "completed"
-        ? progress.studiedMinutesToday + block.durationMinutes
-        : progress.studiedMinutesToday;
-    const completedBlocks = updatedBlocks.filter((entry) => entry.status === "completed").length;
-    const consistencyScore = Math.min(
-      100,
-      Math.round((completedBlocks / updatedBlocks.length) * 100)
-    );
-    const updatedProgress = await this.dailyPlanRepository.saveProgress(user.id, {
-      ...progress,
-      studiedMinutesToday,
-      streakDays: nextStreakDays,
-      consistencyScore: Math.max(progress.consistencyScore, consistencyScore),
-    });
+    const updatedProgress =
+      !wasCompleted && updatedBlock.status === "completed" && this.progressService
+        ? await this.progressService.recordBlockCompleted({
+            userId: user.id,
+            plan: { ...plan, ...planStatus, blocks: updatedBlocks },
+            block: updatedBlock,
+            previousProgress: progress,
+            completedPlanNow,
+          })
+        : await this.dailyPlanRepository.saveProgress(user.id, {
+            ...progress,
+            studiedMinutesToday: wasCompleted
+              ? progress.studiedMinutesToday
+              : updatedBlock.status === "completed"
+                ? progress.studiedMinutesToday + block.durationMinutes
+                : progress.studiedMinutesToday,
+            streakDays: nextStreakDays,
+            consistencyScore: Math.max(
+              progress.consistencyScore,
+              Math.min(100, Math.round((updatedBlocks.filter((entry) => entry.status === "completed").length / updatedBlocks.length) * 100))
+            ),
+            completedBlocks:
+              !wasCompleted && updatedBlock.status === "completed"
+                ? (progress.completedBlocks ?? 0) + 1
+                : progress.completedBlocks,
+            completedPlans:
+              completedPlanNow ? (progress.completedPlans ?? 0) + 1 : progress.completedPlans,
+          });
 
     return { user, dailyPlan: updatedPlan ?? plan, progress: updatedProgress };
   }

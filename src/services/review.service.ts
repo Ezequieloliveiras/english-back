@@ -1,11 +1,13 @@
 import { ContentRepository } from "../repositories/content.repository";
 import { DailyPlanService } from "./dailyPlan.service";
 import { calculateNextReviewDate } from "../utils/reviewScheduler";
+import { ProgressService } from "./progress.service";
 
 export class ReviewService {
   constructor(
     private readonly contentRepository: ContentRepository,
-    private readonly dailyPlanService: DailyPlanService
+    private readonly dailyPlanService: DailyPlanService,
+    private readonly progressService?: ProgressService
   ) {}
 
   async recordReview(userId: string, itemId: string, wasCorrect: boolean) {
@@ -39,11 +41,18 @@ export class ReviewService {
 
     const isReviewQueueItem = item.category.toLowerCase().includes("review");
 
-    await this.dailyPlanService.recordBlockEvidence({
+    const planResult = await this.dailyPlanService.recordBlockEvidence({
       userId,
       blockType: isReviewQueueItem ? "review" : "vocabulary",
       evidenceType: isReviewQueueItem ? "retention_review" : "vocabulary_recall",
       evidenceRef: itemId,
+    });
+    await this.progressService?.recordVocabularyReview({
+      userId,
+      itemId: updated?.id ?? itemId,
+      level: planResult.user.currentLevel,
+      wasCorrect,
+      reviewCount: nextHits + nextMisses,
     });
 
     return updated;

@@ -3,9 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReviewService = void 0;
 const reviewScheduler_1 = require("../utils/reviewScheduler");
 class ReviewService {
-    constructor(contentRepository, dailyPlanService) {
+    constructor(contentRepository, dailyPlanService, progressService) {
         this.contentRepository = contentRepository;
         this.dailyPlanService = dailyPlanService;
+        this.progressService = progressService;
     }
     async recordReview(userId, itemId, wasCorrect) {
         const payload = await this.contentRepository.getLearningContent(userId);
@@ -29,11 +30,18 @@ class ReviewService {
             nextReviewAt,
         });
         const isReviewQueueItem = item.category.toLowerCase().includes("review");
-        await this.dailyPlanService.recordBlockEvidence({
+        const planResult = await this.dailyPlanService.recordBlockEvidence({
             userId,
             blockType: isReviewQueueItem ? "review" : "vocabulary",
             evidenceType: isReviewQueueItem ? "retention_review" : "vocabulary_recall",
             evidenceRef: itemId,
+        });
+        await this.progressService?.recordVocabularyReview({
+            userId,
+            itemId: updated?.id ?? itemId,
+            level: planResult.user.currentLevel,
+            wasCorrect,
+            reviewCount: nextHits + nextMisses,
         });
         return updated;
     }

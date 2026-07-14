@@ -1,5 +1,6 @@
 import { DailyPlanService } from "./dailyPlan.service";
 import { EnglishLevel, UserProfile } from "../types";
+import { UserGoalRepository } from "../repositories/userGoal.repository";
 
 interface ProfilePlanInput {
   name: string;
@@ -164,7 +165,10 @@ const validateProfessionalFocus = (profession: string, mode: UserProfile["profes
 };
 
 export class ProfilePlanService {
-  constructor(private readonly dailyPlanService: DailyPlanService) {}
+  constructor(
+    private readonly dailyPlanService: DailyPlanService,
+    private readonly userGoalRepository?: UserGoalRepository
+  ) {}
 
   async buildPlan(userId: string, input: ProfilePlanInput) {
     const level = input.level.toUpperCase() as EnglishLevel;
@@ -201,6 +205,11 @@ export class ProfilePlanService {
       initialSetupCompleted: true,
     };
     const { dailyPlan, progress, user } = await this.dailyPlanService.createPlanForProfile(userId, profile);
+    await this.userGoalRepository?.upsertGoal(userId, {
+      primaryGoal: input.objective,
+      targetLevel: level,
+      professionalContext: input.profession,
+    });
 
     return {
       status: 201,

@@ -2,40 +2,50 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContentService = void 0;
 class ContentService {
-    constructor(contentRepository, dailyPlanService, settingsRepository, aiRepository, practiceRepository) {
+    constructor(contentRepository, dailyPlanService, settingsRepository, aiRepository, practiceRepository, progressService, userGoalRepository) {
         this.contentRepository = contentRepository;
         this.dailyPlanService = dailyPlanService;
         this.settingsRepository = settingsRepository;
         this.aiRepository = aiRepository;
         this.practiceRepository = practiceRepository;
+        this.progressService = progressService;
+        this.userGoalRepository = userGoalRepository;
     }
     async getBootstrap(userId) {
         const { user, dailyPlan, progress } = await this.dailyPlanService.createOrGetTodayPlan(userId);
-        const [content, settings, realProgressStats, recentSpeakingAttempts, reviewQueue, completionState,] = await Promise.all([
+        const [content, settings, realProgressStats, recentSpeakingAttempts, reviewQueue, completionState, goal,] = await Promise.all([
             this.contentRepository.getLearningContent(userId),
             this.settingsRepository.findOrCreate(userId),
-            this.aiRepository.getProgressStats(userId),
+            this.progressService?.getProgressStats(userId) ?? this.aiRepository.getProgressStats(userId),
             this.aiRepository.getRecentSpeakingAttempts(userId),
             this.contentRepository.getDueReviewItems(userId),
             this.practiceRepository.getUserCompletionState(userId),
+            this.userGoalRepository?.findByUserId(userId) ?? Promise.resolve(null),
         ]);
+        const recalculatedProgress = await this.progressService?.recalculateSkillScores(userId, user.currentLevel);
         const personalizedContent = this.contentRepository.personalizeForPlan(content, user, dailyPlan);
         return {
             user,
             settings,
             dailyPlan,
-            progress,
+            progress: recalculatedProgress ?? progress,
             realProgressStats,
             recentSpeakingAttempts,
             completedActivities: completionState.completedActivities,
             listeningAttempts: completionState.listeningAttempts,
             reviewQueue,
-            goal: {
-                id: `goal-${user.id}`,
-                label: `Reach confident B1 speaking for work`,
-                targetLevel: "B1",
-                progress: progress.consistencyScore,
-            },
+            goal: goal
+                ? {
+                    id: goal.id,
+                    primaryGoal: goal.primaryGoal,
+                    label: goal.primaryGoal,
+                    targetLevel: goal.targetLevel,
+                    professionalContext: goal.professionalContext,
+                    deadline: goal.deadline,
+                    progress: (recalculatedProgress ?? progress).consistencyScore,
+                }
+                : null,
+            requiresGoalSetup: !goal,
             ...personalizedContent,
         };
     }

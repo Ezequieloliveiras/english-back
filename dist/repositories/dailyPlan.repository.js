@@ -49,6 +49,8 @@ const mapPlan = (plan) => ({
     date: plan.date,
     status: plan.status ?? "not_started",
     completedAt: plan.completedAt ?? null,
+    generationMethod: plan.generationMethod ?? "heuristic",
+    generationReason: plan.generationReason ?? "Generated from profile level, goal, difficulty, profession and available minutes.",
     blocks: plan.blocks.map(mapBlock),
 });
 const mapUser = (user) => ({
@@ -74,6 +76,8 @@ const mapProgress = (progress) => ({
     consistencyScore: progress.consistencyScore,
     studiedMinutesToday: progress.studiedMinutesToday,
     streakDays: progress.streakDays,
+    completedBlocks: progress.completedBlocks ?? 0,
+    completedPlans: progress.completedPlans ?? 0,
 });
 const createInitialProgress = (level) => ({
     level,
@@ -84,6 +88,8 @@ const createInitialProgress = (level) => ({
     consistencyScore: 0,
     studiedMinutesToday: 0,
     streakDays: 0,
+    completedBlocks: 0,
+    completedPlans: 0,
 });
 const isLegacyDemoProgress = (progress) => progress.speakingScore === 64 &&
     progress.listeningScore === 71 &&
@@ -163,6 +169,8 @@ class DailyPlanRepository {
                 date: plan.date,
                 status: plan.status ?? "not_started",
                 completedAt: plan.completedAt ?? null,
+                generationMethod: plan.generationMethod ?? "heuristic",
+                generationReason: plan.generationReason ?? "Generated from profile level, goal, difficulty, profession and available minutes.",
                 blocks: plan.blocks,
             },
         }, { new: true, upsert: true });

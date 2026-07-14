@@ -9,12 +9,12 @@ class ConversationController {
                 response.status(401).json({ message: "Authentication required" });
                 return;
             }
-            const { modeId, message } = request.body;
+            const { modeId, message, conversationSessionId } = request.body;
             if (!modeId || !message) {
                 response.status(400).json({ message: "modeId and message are required" });
                 return;
             }
-            const reply = await this.conversationService.reply(request.auth.userId, modeId, message);
+            const reply = await this.conversationService.reply(request.auth.userId, modeId, message, conversationSessionId);
             response.json(reply);
         };
     }

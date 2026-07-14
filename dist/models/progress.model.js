@@ -12,5 +12,7 @@ const progressSchema = new mongoose_1.Schema({
     consistencyScore: { type: Number, required: true },
     studiedMinutesToday: { type: Number, required: true },
     streakDays: { type: Number, required: true },
+    completedBlocks: { type: Number, required: true, default: 0 },
+    completedPlans: { type: Number, required: true, default: 0 },
 }, { timestamps: true });
 exports.ProgressModel = (0, mongoose_1.model)("Progress", progressSchema);

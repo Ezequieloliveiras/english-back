@@ -11,6 +11,8 @@ const progressSchema = new Schema(
     consistencyScore: { type: Number, required: true },
     studiedMinutesToday: { type: Number, required: true },
     streakDays: { type: Number, required: true },
+    completedBlocks: { type: Number, required: true, default: 0 },
+    completedPlans: { type: Number, required: true, default: 0 },
   },
   { timestamps: true }
 );

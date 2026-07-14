@@ -45,6 +45,17 @@ const userSettingsSchema = new Schema(
       default: "conversation",
       enum: ["conversation", "interview", "work", "travel", "technical_english"],
     },
+    goalType: {
+      type: String,
+      default: "conversation",
+      enum: ["conversation", "interview", "work", "travel", "technical_english"],
+    },
+    goalDescription: { type: String, default: "" },
+    targetLevel: {
+      type: String,
+      default: "B1",
+      enum: ["A1", "A2", "B1", "B2", "C1"],
+    },
     dailyMinutes: { type: Number, required: true, default: 20 },
   },
   { timestamps: true }

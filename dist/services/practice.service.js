@@ -24,9 +24,10 @@ const activityTypeToDailyPlanEvidence = (type) => {
     return null;
 };
 class PracticeService {
-    constructor(practiceRepository, dailyPlanService) {
+    constructor(practiceRepository, dailyPlanService, progressService) {
         this.practiceRepository = practiceRepository;
         this.dailyPlanService = dailyPlanService;
+        this.progressService = progressService;
     }
     async completeActivity(input) {
         if (!input.type || !input.itemId || !input.title) {
@@ -79,11 +80,17 @@ class PracticeService {
         });
         const attempt = saved.attempt;
         if (saved.created) {
-            await this.dailyPlanService?.recordBlockEvidence({
+            const planResult = await this.dailyPlanService?.recordBlockEvidence({
                 userId: input.userId,
                 blockType: "listening",
                 evidenceType: "listening_attempt",
                 evidenceRef: input.exerciseId,
+            });
+            await this.progressService?.recordListeningAttempt({
+                userId: input.userId,
+                attemptId: String(attempt._id),
+                exerciseId: input.exerciseId,
+                level: planResult?.user.currentLevel ?? "A1",
             });
         }
         return {

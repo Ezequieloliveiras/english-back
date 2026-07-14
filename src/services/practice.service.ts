@@ -1,6 +1,7 @@
 import { PracticeRepository } from "../repositories/practice.repository";
 import { StudyBlockType } from "../types";
 import { DailyPlanService } from "./dailyPlan.service";
+import { ProgressService } from "./progress.service";
 
 const activityTypeToDailyPlanEvidence = (type: string): {
   blockType: StudyBlockType;
@@ -38,7 +39,8 @@ const activityTypeToDailyPlanEvidence = (type: string): {
 export class PracticeService {
   constructor(
     private readonly practiceRepository: PracticeRepository,
-    private readonly dailyPlanService?: DailyPlanService
+    private readonly dailyPlanService?: DailyPlanService,
+    private readonly progressService?: ProgressService
   ) {}
 
   async completeActivity(input: {
@@ -114,11 +116,17 @@ export class PracticeService {
     const attempt = saved.attempt;
 
     if (saved.created) {
-      await this.dailyPlanService?.recordBlockEvidence({
+      const planResult = await this.dailyPlanService?.recordBlockEvidence({
         userId: input.userId,
         blockType: "listening",
         evidenceType: "listening_attempt",
         evidenceRef: input.exerciseId,
+      });
+      await this.progressService?.recordListeningAttempt({
+        userId: input.userId,
+        attemptId: String(attempt._id),
+        exerciseId: input.exerciseId,
+        level: planResult?.user.currentLevel ?? "A1",
       });
     }
 

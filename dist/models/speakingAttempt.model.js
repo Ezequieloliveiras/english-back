@@ -17,6 +17,7 @@ const speakingAttemptSchema = new mongoose_1.Schema({
     fluencyScore: { type: Number, required: true, default: 0 },
     wordsSpokenCount: { type: Number, required: true, default: 0 },
     correctedWords: { type: [String], required: true, default: [] },
+    correctionCount: { type: Number, required: true, default: 0 },
     feedback: { type: mongoose_1.Schema.Types.Mixed, required: true, default: {} },
     suggestion: { type: String },
     durationSeconds: { type: Number },
@@ -26,6 +27,7 @@ const speakingAttemptSchema = new mongoose_1.Schema({
     analysisProvider: { type: String },
     analysisModel: { type: String },
     analysisDetails: { type: mongoose_1.Schema.Types.Mixed },
+    metricMetadata: { type: mongoose_1.Schema.Types.Mixed },
     audioMimeType: { type: String },
     status: { type: String, default: "ok" },
 }, { timestamps: true });

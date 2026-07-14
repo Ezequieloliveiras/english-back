@@ -2,6 +2,7 @@ import OpenAI, { toFile } from "openai";
 import { env } from "../config/env";
 import { AiRepository } from "../repositories/ai.repository";
 import { SettingsRepository, UserSettings } from "../repositories/settings.repository";
+import { ProgressService } from "./progress.service";
 import {
   SpeakingCoachStatus,
   SpeakingCoachPipelineResult,
@@ -34,6 +35,7 @@ interface ConversationInput {
   message: string;
   level?: string;
   goal?: string;
+  conversationSessionId?: string;
   previousMessages?: PreviousMessage[];
 }
 
@@ -95,6 +97,9 @@ interface SpeakingCoachAnalysis {
   metrics: Array<{
     label: string;
     value: number;
+    isEstimated?: boolean;
+    analysisMethod?: "heuristic_audio_text" | "transcript_similarity" | "acoustic_estimate" | "provider_phoneme_analysis";
+    confidence?: number;
   }>;
   feedback: Array<{
     title: string;
@@ -117,6 +122,14 @@ interface SpeakingCoachAnalysis {
   phonemeAnalysis?: SpeakingCoachPipelineResult["phonemeAnalysis"];
   rhythmAnalysis?: SpeakingCoachPipelineResult["rhythmAnalysis"];
   analysisEngine?: SpeakingCoachPipelineResult["analysisEngine"];
+  metricMetadata?: {
+    isEstimated: boolean;
+    analysisMethod: "heuristic_audio_text" | "transcript_similarity" | "acoustic_estimate" | "provider_phoneme_analysis";
+    confidence: number;
+  };
+  pronunciationEstimate?: number;
+  rhythmEstimate?: number;
+  intonationEstimate?: number;
   mode: "ai";
 }
 
@@ -126,6 +139,7 @@ export interface AiReply {
   suggestedPhrase?: string;
   nextQuestion?: string;
   level?: string;
+  sessionId?: string;
 }
 
 export class AiProviderError extends Error {
@@ -181,11 +195,61 @@ const normalizeWords = (text: string) =>
 
 const countWords = (text: string) => normalizeWords(text).length;
 
+const calculateCorrectionCount = (input: {
+  missingWords: string[];
+  extraWords: string[];
+  similarity: number;
+  correctedWords: string[];
+}) => {
+  const structuralDifferences = input.missingWords.length + input.extraWords.length;
+  const similarityPenalty = input.similarity < 0.92 ? 1 : 0;
+
+  return Math.max(input.correctedWords.length, structuralDifferences, similarityPenalty);
+};
+
+const buildMetricMetadata = (comparison: { coverage: number; similarity: number }) => {
+  const confidence = Number(
+    Math.max(0.25, Math.min(0.85, comparison.coverage * 0.45 + comparison.similarity * 0.4)).toFixed(2)
+  );
+
+  return {
+    isEstimated: true,
+    analysisMethod: "heuristic_audio_text" as const,
+    confidence,
+  };
+};
+
+const decorateEstimatedMetrics = (
+  metrics: SpeakingCoachAnalysis["metrics"],
+  comparison: { coverage: number; similarity: number }
+) => {
+  const metadata = buildMetricMetadata(comparison);
+
+  return metrics.map((metric) => ({
+    ...metric,
+    ...metadata,
+  }));
+};
+
 const metricsToMap = (metrics: SpeakingCoachAnalysis["metrics"]) =>
   metrics.reduce<Record<string, number>>((acc, metric) => {
     acc[metric.label] = metric.value;
     return acc;
   }, {});
+
+const findLowestSpeakingMetric = (metrics: Record<string, number>) => {
+  const candidates = [
+    ["Pronunciation", metrics["Pronunciation Score"]],
+    ["Naturalness", metrics.Naturalness],
+    ["Connected Speech", metrics["Connected Speech"]],
+    ["Stress", metrics.Stress],
+    ["Intonation", metrics.Intonation],
+    ["Rhythm", metrics.Rhythm],
+    ["Fluency", metrics.Fluency],
+  ].filter((entry): entry is [string, number] => typeof entry[1] === "number");
+
+  return candidates.sort((a, b) => a[1] - b[1])[0]?.[0] ?? "Not enough data yet";
+};
 
 const languageInstruction = (settings: UserSettings) =>
   settings.languageMode === "full_english"
@@ -229,7 +293,8 @@ export class OpenAiService {
 
   constructor(
     private readonly aiRepository: AiRepository,
-    private readonly settingsRepository?: SettingsRepository
+    private readonly settingsRepository?: SettingsRepository,
+    private readonly progressService?: ProgressService
   ) {
     this.client = env.openAiApiKey
       ? new OpenAI({ apiKey: env.openAiApiKey, maxRetries: 0, timeout: 20000 })
@@ -354,6 +419,13 @@ Return valid JSON exactly in this format:
 
   async generateConversationReply(input: ConversationInput): Promise<AiReply> {
     const settings = await this.getUserSettings(input.userId);
+    const storedHistory = await this.aiRepository.getRecentConversationMessages({
+      userId: input.userId,
+      mode: input.mode,
+      sessionId: input.conversationSessionId,
+      limit: 8,
+      maxCharacters: 4000,
+    });
     const reply = await this.createJsonResponse<AiReply>({
       mode: "conversation",
       instructions: `
@@ -365,17 +437,25 @@ Nível: ${input.level ?? "A1"}
 Objetivo: ${input.goal ?? "comunicacao real"}
 `,
       userContent: JSON.stringify({
-        recentHistory: limitMessages(input.previousMessages),
+        recentHistory: storedHistory.length ? storedHistory : limitMessages(input.previousMessages),
         userMessage: input.message,
       }),
     });
 
-    await this.persistConversation(input, reply);
-    return reply;
+    const session = await this.persistConversation(input, reply);
+    return { ...reply, sessionId: session.sessionId };
   }
 
   async generateDeveloperEnglishReply(input: ConversationInput): Promise<AiReply> {
     const settings = await this.getUserSettings(input.userId);
+    const mode = `developer:${input.mode}`;
+    const storedHistory = await this.aiRepository.getRecentConversationMessages({
+      userId: input.userId,
+      mode,
+      sessionId: input.conversationSessionId,
+      limit: 8,
+      maxCharacters: 4000,
+    });
     const reply = await this.createJsonResponse<AiReply>({
       mode: "dev-mode",
       instructions: `
@@ -388,17 +468,24 @@ Nível: ${input.level ?? "A1"}
 Objetivo: ${input.goal ?? "inglês técnico para trabalho"}
 `,
       userContent: JSON.stringify({
-        recentHistory: limitMessages(input.previousMessages),
+        recentHistory: storedHistory.length ? storedHistory : limitMessages(input.previousMessages),
         userMessage: input.message,
       }),
     });
 
-    await this.persistConversation({ ...input, mode: `developer:${input.mode}` }, reply);
-    return reply;
+    const session = await this.persistConversation({ ...input, mode }, reply);
+    return { ...reply, sessionId: session.sessionId };
   }
 
   async generateThinkInEnglishReply(input: ConversationInput): Promise<AiReply> {
     const settings = await this.getUserSettings(input.userId);
+    const storedHistory = await this.aiRepository.getRecentConversationMessages({
+      userId: input.userId,
+      mode: "think-in-english",
+      sessionId: input.conversationSessionId,
+      limit: 8,
+      maxCharacters: 4000,
+    });
     const reply = await this.createJsonResponse<AiReply>({
       mode: "think-in-english",
       instructions: `
@@ -408,13 +495,13 @@ Return this JSON shape:
 {"reply":"short answer in simple English","correction":"","suggestedPhrase":"useful phrase","nextQuestion":"short question","level":"A1"}
 `,
       userContent: JSON.stringify({
-        recentHistory: limitMessages(input.previousMessages),
+        recentHistory: storedHistory.length ? storedHistory : limitMessages(input.previousMessages),
         userMessage: input.message,
       }),
     });
 
-    await this.persistConversation({ ...input, mode: "think-in-english" }, reply);
-    return reply;
+    const session = await this.persistConversation({ ...input, mode: "think-in-english" }, reply);
+    return { ...reply, sessionId: session.sessionId };
   }
 
   async generateVocabularyExamples(input: VocabularyInput) {
@@ -598,7 +685,7 @@ Return valid JSON exactly in this format:
           extraWords: comparison.extraWords,
         },
         overallScore: derived.overallScore,
-        metrics: derived.metrics,
+        metrics: decorateEstimatedMetrics(derived.metrics, comparison),
         feedback: localizedFeedbackResult.feedback ?? [],
         strengths: localizedFeedbackResult.strengths ?? [],
         improvements: localizedFeedbackResult.improvements ?? [],
@@ -614,8 +701,15 @@ Return valid JSON exactly in this format:
       const localizedResult = result;
       const metrics = metricsToMap(localizedResult.metrics);
       const correctedWords = comparison.missingWords.slice(0, 12);
+      const correctionCount = calculateCorrectionCount({
+        missingWords: comparison.missingWords,
+        extraWords: comparison.extraWords,
+        similarity: comparison.similarity,
+        correctedWords,
+      });
+      const metadata = buildMetricMetadata(comparison);
       stage = "save_attempt";
-      await this.aiRepository.saveSpeakingAttempt({
+      const savedAttempt = await this.aiRepository.saveSpeakingAttempt({
         userId: input.userId,
         expectedText: input.targetPhrase,
         transcribedText: transcript,
@@ -628,6 +722,7 @@ Return valid JSON exactly in this format:
         fluencyScore: metrics.Fluency ?? localizedResult.overallScore,
         wordsSpokenCount: countWords(transcript),
         correctedWords,
+        correctionCount,
         feedback: localizedResult.feedback,
         suggestion: localizedResult.nextPhrase,
         durationSeconds: audioQuality.durationSeconds,
@@ -642,8 +737,22 @@ Return valid JSON exactly in this format:
           rhythmAnalysis: pipeline.rhythmAnalysis,
           analysisEngine: pipeline.analysisEngine,
         },
+        metricMetadata: metadata,
         audioMimeType: input.audioMimeType,
         status: "ok",
+      });
+      await this.progressService?.recordSpeakingAttempt({
+        userId: input.userId,
+        attemptId: String((savedAttempt as any)._id ?? requestId),
+        expectedText: input.targetPhrase,
+        transcribedText: transcript,
+        wordsSpokenCount: countWords(transcript),
+        correctedWords,
+        correctionCount,
+        durationSeconds: audioQuality.durationSeconds,
+        mainImprovementArea: findLowestSpeakingMetric(metrics),
+        pronunciationScore: metrics["Pronunciation Score"] ?? localizedResult.overallScore,
+        level: (input.level?.toUpperCase() as any) ?? "A1",
       });
 
       console.info("[ai:speaking-coach] completed", {
@@ -658,6 +767,10 @@ Return valid JSON exactly in this format:
 
       return {
         ...localizedResult,
+        metricMetadata: metadata,
+        pronunciationEstimate: metrics["Pronunciation Score"] ?? localizedResult.overallScore,
+        rhythmEstimate: metrics.Rhythm ?? localizedResult.overallScore,
+        intonationEstimate: metrics.Intonation ?? localizedResult.overallScore,
         mode: "ai",
       };
     } catch (error) {
@@ -731,9 +844,10 @@ Return this JSON shape:
   }
 
   private async persistConversation(input: ConversationInput, reply: AiReply) {
-    await this.aiRepository.saveConversationTurn({
+    const session = await this.aiRepository.saveConversationTurn({
       userId: input.userId,
       mode: input.mode,
+      sessionId: input.conversationSessionId,
       userMessage: input.message,
       assistantMessage: reply.reply,
       correction: reply.correction,
@@ -749,5 +863,7 @@ Return this JSON shape:
         explanation: reply.correction,
       });
     }
+
+    return session;
   }
 }

@@ -12,4 +12,6 @@ const reviewScheduleSchema = new Schema(
   { timestamps: true }
 );
 
+reviewScheduleSchema.index({ userId: 1, vocabularyItemId: 1 }, { unique: true });
+
 export const ReviewScheduleModel = model("ReviewSchedule", reviewScheduleSchema);

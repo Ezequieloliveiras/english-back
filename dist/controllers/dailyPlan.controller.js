@@ -31,11 +31,7 @@ class DailyPlanController {
                 return;
             }
             const result = await this.dailyPlanService.completeBlock(planId, blockId, request.auth.userId);
-            if (!result) {
-                response.status(404).json({ message: "Study block not found" });
-                return;
-            }
-            response.json(result);
+            response.status(result.status).json(result.body);
         };
     }
 }

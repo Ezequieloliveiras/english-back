@@ -10,4 +10,5 @@ const reviewScheduleSchema = new mongoose_1.Schema({
     confidence: { type: Number, required: true, default: 50 },
     nextReviewAt: { type: Date, required: true },
 }, { timestamps: true });
+reviewScheduleSchema.index({ userId: 1, vocabularyItemId: 1 }, { unique: true });
 exports.ReviewScheduleModel = (0, mongoose_1.model)("ReviewSchedule", reviewScheduleSchema);

@@ -13,6 +13,7 @@ interface MessageInput {
 interface SaveConversationInput {
   userId: string;
   mode: string;
+  sessionId?: string;
   userMessage: string;
   assistantMessage: string;
   correction?: string;
@@ -42,6 +43,7 @@ interface SaveSpeakingAttemptInput {
   fluencyScore: number;
   wordsSpokenCount: number;
   correctedWords: string[];
+  correctionCount: number;
   feedback: unknown;
   suggestion?: string;
   durationSeconds?: number;
@@ -51,6 +53,7 @@ interface SaveSpeakingAttemptInput {
   analysisProvider?: string;
   analysisModel?: string;
   analysisDetails?: unknown;
+  metricMetadata?: unknown;
   audioMimeType?: string;
   status?: string;
 }
@@ -86,6 +89,22 @@ const nextReviewDate = () => {
   return date;
 };
 
+const trimMessages = (messages: MessageInput[], limit: number, maxCharacters: number) => {
+  const recent = messages.slice(-limit);
+  let total = 0;
+  const trimmed: MessageInput[] = [];
+
+  for (const message of [...recent].reverse()) {
+    total += message.content.length;
+    if (total > maxCharacters) {
+      break;
+    }
+    trimmed.unshift(message);
+  }
+
+  return trimmed;
+};
+
 export class AiRepository {
   async saveConversationTurn(input: SaveConversationInput) {
     const messages: MessageInput[] = [
@@ -94,13 +113,16 @@ export class AiRepository {
     ];
 
     if (!isDatabaseReady()) {
-      const key = `${input.userId}:${input.mode}`;
+      const key = input.sessionId ?? `${input.userId}:${input.mode}`;
       memorySessions.set(key, [...(memorySessions.get(key) ?? []), ...messages]);
-      return;
+      return { sessionId: key };
     }
 
-    await ConversationSessionModel.findOneAndUpdate(
-      { userId: input.userId, mode: input.mode },
+    const query = input.sessionId && mongoose.Types.ObjectId.isValid(input.sessionId)
+      ? { _id: input.sessionId, userId: input.userId }
+      : { userId: input.userId, mode: input.mode };
+    const session = await ConversationSessionModel.findOneAndUpdate(
+      query,
       {
         $setOnInsert: {
           userId: input.userId,
@@ -116,6 +138,31 @@ export class AiRepository {
       },
       { new: true, upsert: true }
     );
+
+    return { sessionId: String(session._id) };
+  }
+
+  async getRecentConversationMessages(input: {
+    userId: string;
+    mode: string;
+    sessionId?: string;
+    limit?: number;
+    maxCharacters?: number;
+  }): Promise<MessageInput[]> {
+    const limit = input.limit ?? 8;
+    const maxCharacters = input.maxCharacters ?? 4000;
+
+    if (!isDatabaseReady()) {
+      const key = input.sessionId ?? `${input.userId}:${input.mode}`;
+      return trimMessages(memorySessions.get(key) ?? [], limit, maxCharacters);
+    }
+
+    const query = input.sessionId && mongoose.Types.ObjectId.isValid(input.sessionId)
+      ? { _id: input.sessionId, userId: input.userId }
+      : { userId: input.userId, mode: input.mode };
+    const session = await ConversationSessionModel.findOne(query).select("messages");
+
+    return trimMessages((session?.messages ?? []) as MessageInput[], limit, maxCharacters);
   }
 
   async saveMistake(input: SaveMistakeInput) {
@@ -146,72 +193,11 @@ export class AiRepository {
     if (!isDatabaseReady()) {
       const attempts = memorySpeakingAttempts.get(input.userId) ?? [];
       memorySpeakingAttempts.set(input.userId, [...attempts, input]);
-      await this.incrementSpeakingStats(input);
       return input;
     }
 
     const attempt = await SpeakingAttemptModel.create(input);
-    await this.incrementSpeakingStats(input);
     return attempt;
-  }
-
-  async incrementSpeakingStats(input: SaveSpeakingAttemptInput) {
-    const correctionCount = input.correctedWords.length || input.feedback ? 1 : 0;
-    const today = new Date();
-    const todayKey = today.toISOString().slice(0, 10);
-
-    if (!isDatabaseReady()) {
-      const existing = memoryStats.get(input.userId) ?? createEmptyStats();
-      const lastStudyKey = existing.lastStudyDate?.slice(0, 10);
-      const currentStreak =
-        lastStudyKey === todayKey ? existing.currentStreak : existing.currentStreak + 1;
-
-      const updated = {
-        ...existing,
-        totalWordsPronounced: existing.totalWordsPronounced + input.wordsSpokenCount,
-        totalPhrasesPracticed: existing.totalPhrasesPracticed + 1,
-        totalSpeakingSessions: existing.totalSpeakingSessions + 1,
-        totalRecordings: existing.totalRecordings + 1,
-        totalCorrections: existing.totalCorrections + correctionCount,
-        currentStreak,
-        lastStudyDate: today.toISOString(),
-        mainImprovementArea: findLowestScoreArea(input),
-        mostPracticedWords: mergeWords(existing.mostPracticedWords, input.transcribedText),
-        mostMissedWords: mergeList(existing.mostMissedWords, input.correctedWords),
-        weeklySpeaking: buildMemoryWeeklySpeaking(input.userId, input),
-      };
-      memoryStats.set(input.userId, updated);
-      return updated;
-    }
-
-    const existing = await UserProgressStatsModel.findOne({ userId: input.userId });
-    const lastStudyKey = existing?.lastStudyDate?.toISOString().slice(0, 10);
-    const shouldIncrementStreak = lastStudyKey !== todayKey;
-
-    const updated = await UserProgressStatsModel.findOneAndUpdate(
-      { userId: input.userId },
-      {
-        $inc: {
-          totalWordsPronounced: input.wordsSpokenCount,
-          totalPhrasesPracticed: 1,
-          totalSpeakingSessions: 1,
-          totalRecordings: 1,
-          totalCorrections: correctionCount,
-          ...(shouldIncrementStreak ? { currentStreak: 1 } : {}),
-        },
-        $set: {
-          lastStudyDate: today,
-          mainImprovementArea: findLowestScoreArea(input),
-        },
-        $addToSet: {
-          mostPracticedWords: { $each: extractWords(input.transcribedText).slice(0, 8) },
-          mostMissedWords: { $each: input.correctedWords.slice(0, 8) },
-        },
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-
-    return mapStats(updated, await this.getWeeklySpeaking(input.userId));
   }
 
   async getProgressStats(userId: string): Promise<UserProgressStats> {
@@ -314,47 +300,3 @@ const mapStats = (stats: any, weeklySpeaking: UserProgressStats["weeklySpeaking"
   mostMissedWords: stats.mostMissedWords ?? [],
   weeklySpeaking,
 });
-
-const extractWords = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z'\s]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length > 1);
-
-const mergeWords = (current: string[], text: string) => mergeList(current, extractWords(text));
-
-const mergeList = (current: string[], incoming: string[]) =>
-  Array.from(new Set([...current, ...incoming.map((item) => item.toLowerCase())])).slice(0, 20);
-
-const findLowestScoreArea = (input: SaveSpeakingAttemptInput) => {
-  const scores = [
-    ["Pronunciation", input.pronunciationScore],
-    ["Naturalness", input.naturalnessScore],
-    ["Connected Speech", input.connectedSpeechScore],
-    ["Stress", input.stressScore],
-    ["Intonation", input.intonationScore],
-    ["Rhythm", input.rhythmScore],
-    ["Fluency", input.fluencyScore],
-  ] as const;
-
-  return [...scores].sort((a, b) => a[1] - b[1])[0][0];
-};
-
-const buildMemoryWeeklySpeaking = (userId: string, input: SaveSpeakingAttemptInput) => {
-  const attempts = (memorySpeakingAttempts.get(userId) ?? [input]).slice(-7);
-
-  return attempts.map((attempt, index) => ({
-    dateLabel: index === attempts.length - 1 ? "Today" : `Attempt ${index + 1}`,
-    score: Math.round(
-      (attempt.pronunciationScore +
-        attempt.naturalnessScore +
-        attempt.connectedSpeechScore +
-        attempt.stressScore +
-        attempt.intonationScore +
-        attempt.rhythmScore +
-        attempt.fluencyScore) /
-        7
-    ),
-  }));
-};

@@ -81,6 +81,50 @@ const categoryKey = (category) => {
     }
     return category;
 };
+const skillKey = (value) => {
+    if (value === "thinking_in_english") {
+        return "thinkingInEnglish";
+    }
+    return typeof value === "string" ? value : "";
+};
+const moduleEvidenceConfig = {
+    shadowing: {
+        type: "practice_completion",
+        score: 68,
+        skills: ["speaking", "pronunciation", "fluency", "retention"],
+        categories: ["speaking", "pronunciation", "fluency", "vocabulary"],
+    },
+    "speaking-coach": {
+        type: "pronunciation_analysis",
+        score: 70,
+        skills: ["pronunciation", "speaking", "fluency"],
+        categories: ["speaking", "pronunciation", "fluency", "interaction"],
+    },
+    listening: {
+        type: "listening_attempt",
+        score: 65,
+        skills: ["listening", "retention"],
+        categories: ["listening", "interaction"],
+    },
+    vocabulary: {
+        type: "vocabulary_recall",
+        score: 68,
+        skills: ["vocabulary", "retention"],
+        categories: ["vocabulary", "speaking", "interaction"],
+    },
+    conversation: {
+        type: "conversation_task",
+        score: 68,
+        skills: ["interaction", "speaking", "fluency", "vocabulary"],
+        categories: ["interaction", "speaking", "fluency", "vocabulary"],
+    },
+    review: {
+        type: "retention_review",
+        score: 70,
+        skills: ["retention", "vocabulary"],
+        categories: ["vocabulary", "speaking", "interaction"],
+    },
+};
 class LearningService {
     getRoadmap() {
         return {
@@ -126,6 +170,7 @@ class LearningService {
             userId,
             competencyId: { $in: required },
         });
+        const competenciesInProgress = progressEntries.filter((entry) => entry.status !== "mastered" && (entry.evidence?.length ?? 0) > 0).length;
         const competenciesMastered = progressEntries.filter((entry) => entry.status === "mastered").length;
         const competenciesRequired = required.length;
         const levelProgress = competenciesRequired
@@ -141,6 +186,7 @@ class LearningService {
                 currentLevel,
                 targetLevel: getTargetLevel(currentLevel, user.primaryGoal),
                 levelProgress,
+                competenciesInProgress,
                 competenciesMastered,
                 competenciesRequired,
                 checkpointStatus,
@@ -151,6 +197,7 @@ class LearningService {
             currentLevel: normalizeCEFRLevel(saved.currentLevel),
             targetLevel: normalizeCEFRLevel(saved.targetLevel),
             levelProgress: saved.levelProgress,
+            competenciesInProgress,
             competenciesMastered: saved.competenciesMastered,
             competenciesRequired: saved.competenciesRequired,
             checkpointStatus: saved.checkpointStatus,
@@ -181,6 +228,19 @@ class LearningService {
             const key = categoryKey(competency.category);
             buckets.set(key, [...(buckets.get(key) ?? []), progress.masteryScore]);
             buckets.set("retention", [...(buckets.get("retention") ?? []), progress.retentionScore]);
+            for (const evidence of progress.evidence) {
+                const skills = Array.isArray(evidence.metadata?.skills)
+                    ? evidence.metadata.skills
+                    : evidence.metadata?.skill
+                        ? [evidence.metadata.skill]
+                        : [];
+                for (const skill of skills) {
+                    const evidenceKey = skillKey(skill);
+                    if (evidenceKey) {
+                        buckets.set(evidenceKey, [...(buckets.get(evidenceKey) ?? []), evidence.score]);
+                    }
+                }
+            }
         }
         for (const [key, values] of buckets) {
             if (key in profile && values.length > 0) {
@@ -202,6 +262,10 @@ class LearningService {
                 const levelIndex = learningRoadmap_1.cefrSequence.indexOf(level.code);
                 const levelCompetencies = learningRoadmap_1.competencies.filter((competency) => competency.level === level.code);
                 const mastered = levelCompetencies.filter((competency) => progressByCompetency.get(competency.id)?.status === "mastered").length;
+                const inProgress = levelCompetencies.filter((competency) => {
+                    const progress = progressByCompetency.get(competency.id);
+                    return progress && progress.status !== "mastered" && progress.evidence.length > 0;
+                }).length;
                 return {
                     ...level,
                     status: levelIndex < currentIndex
@@ -210,8 +274,9 @@ class LearningService {
                             ? "current"
                             : "locked",
                     progress: levelCompetencies.length
-                        ? clampScore((mastered / levelCompetencies.length) * 100)
+                        ? clampScore(((mastered + inProgress * 0.35) / levelCompetencies.length) * 100)
                         : 0,
+                    competenciesInProgress: inProgress,
                     competenciesMastered: mastered,
                     competenciesTotal: levelCompetencies.length,
                 };
@@ -333,8 +398,67 @@ class LearningService {
             },
         };
     }
+    async resolveCurrentCompetencyIds(input) {
+        if (Array.isArray(input.competencyIds) && input.competencyIds.length > 0) {
+            return input.competencyIds;
+        }
+        const user = await user_model_1.UserModel.findById(input.userId);
+        const currentLevel = normalizeCEFRLevel(user?.currentLevel);
+        const date = todayKey();
+        const dailyPlan = await dailyPlan_model_1.DailyPlanModel.findOne({ userId: input.userId, date });
+        const planCompetencyIds = Array.isArray(dailyPlan?.targetCompetencies)
+            ? dailyPlan.targetCompetencies
+            : [];
+        const unit = (dailyPlan?.learningUnitId
+            ? learningRoadmap_1.learningUnits.find((entry) => entry.id === dailyPlan.learningUnitId)
+            : null) ??
+            learningRoadmap_1.learningUnits.find((entry) => entry.level === currentLevel && entry.status === "published") ??
+            learningRoadmap_1.learningUnits.find((entry) => entry.status === "published");
+        const candidateIds = planCompetencyIds.length ? planCompetencyIds : unit?.competencies ?? [];
+        const config = moduleEvidenceConfig[input.moduleType];
+        const matching = candidateIds.filter((competencyId) => {
+            const competency = this.getCompetency(competencyId);
+            return competency ? config.categories.includes(competency.category) : false;
+        });
+        return matching.length ? matching : candidateIds;
+    }
+    async recordPracticeCompletionEvidence(input) {
+        const config = moduleEvidenceConfig[input.moduleType];
+        const competencyIds = await this.resolveCurrentCompetencyIds({
+            userId: input.userId,
+            moduleType: input.moduleType,
+            competencyIds: input.competencyIds,
+        });
+        if (competencyIds.length === 0) {
+            console.warn("[learning:evidence] no competencies resolved", {
+                userId: input.userId,
+                moduleType: input.moduleType,
+                sourceId: input.sourceId,
+            });
+            return [];
+        }
+        const score = clampScore(input.score ?? config.score);
+        return Promise.all(competencyIds.map((competencyId) => this.recordEvidence({
+            userId: input.userId,
+            competencyId,
+            evidence: {
+                type: config.type,
+                score,
+                sourceId: input.sourceId,
+                metadata: {
+                    ...(input.metadata ?? {}),
+                    moduleType: input.moduleType,
+                    skills: config.skills,
+                },
+            },
+        })));
+    }
     async recordListeningAttemptEvidence(input) {
-        const competencyIds = Array.isArray(input.competencyIds) ? input.competencyIds : [];
+        const competencyIds = await this.resolveCurrentCompetencyIds({
+            userId: input.userId,
+            moduleType: "listening",
+            competencyIds: input.competencyIds,
+        });
         if (competencyIds.length === 0) {
             return [];
         }
@@ -353,6 +477,8 @@ class LearningService {
                     slowAudioUsed: Boolean(input.slowAudioUsed),
                     replayCount: Math.max(0, Number(input.replayCount ?? 0)),
                     unknownWords: input.unknownWords ?? [],
+                    moduleType: "listening",
+                    skills: moduleEvidenceConfig.listening.skills,
                 },
             },
         })));

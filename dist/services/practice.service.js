@@ -48,6 +48,17 @@ class PracticeService {
                 evidenceType: evidence.evidenceType,
                 evidenceRef: input.itemId,
             });
+            if (evidence.blockType !== "listening" && evidence.blockType !== "speaking-coach") {
+                await this.learningService?.recordPracticeCompletionEvidence({
+                    userId: input.userId,
+                    moduleType: evidence.blockType,
+                    sourceId: input.itemId,
+                    metadata: {
+                        title: input.title,
+                        evidenceType: evidence.evidenceType,
+                    },
+                });
+            }
         }
         return {
             status: 200,

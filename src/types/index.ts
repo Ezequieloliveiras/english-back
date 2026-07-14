@@ -109,6 +109,7 @@ export interface UserLevelProgress {
   currentLevel: CEFRLevel;
   targetLevel: CEFRLevel;
   levelProgress: number;
+  competenciesInProgress?: number;
   competenciesMastered: number;
   competenciesRequired: number;
   checkpointStatus: "locked" | "available" | "in_progress" | "passed" | "failed";

@@ -66,6 +66,7 @@ interface SpeakingCoachInput {
   focus?: string;
   context?: string;
   level?: string;
+  requestId?: string;
 }
 
 interface MistakeAnalysis {
@@ -445,12 +446,22 @@ Use os minutos disponíveis sem ultrapassar o total.
 
   async analyzeSpeakingCoachAttempt(input: SpeakingCoachInput): Promise<SpeakingCoachAnalysis> {
     const settings = await this.getUserSettings(input.userId);
+    const startedAt = Date.now();
+    const requestId = input.requestId ?? `speaking-${Date.now().toString(36)}`;
+    let stage = "start";
 
     if (!this.client) {
       throw new AiProviderError("OpenAI is not configured on the backend.", 503);
     }
 
     try {
+      console.info("[ai:speaking-coach] start", {
+        requestId,
+        stage,
+        fileSizeBytes: input.audioBuffer.length,
+        mimeType: input.audioMimeType,
+      });
+      stage = "normalize_audio";
       const { wavBuffer, audioQuality } = await normalizeAndAnalyzeAudio({
         buffer: input.audioBuffer,
         mimeType: input.audioMimeType,
@@ -458,18 +469,25 @@ Use os minutos disponíveis sem ultrapassar o total.
       const audioFile = await toFile(wavBuffer, `speaking-coach.${speakingAudioExtension("audio/wav")}`, {
         type: "audio/wav",
       });
+      stage = "transcribe";
       const transcription = await this.client.audio.transcriptions.create({
         file: audioFile,
         model: "gpt-4o-mini-transcribe",
         language: "en",
       });
       const transcript = transcription.text ?? "";
+      stage = "compare_transcript";
       const comparison = comparePhraseToTranscript(input.targetPhrase, transcript);
       validateTranscriptComparison(transcript, audioQuality, comparison);
+      stage = "local_analysis";
       const pipeline = buildSpeakingCoachPipeline(audioQuality, comparison);
       const derived = deriveSpeakingMetrics(audioQuality, comparison, pipeline);
 
       console.info("[ai:speaking-coach] validated", {
+        requestId,
+        stage,
+        fileSizeBytes: input.audioBuffer.length,
+        mimeType: input.audioMimeType,
         durationSeconds: audioQuality.durationSeconds,
         speechRatio: audioQuality.speechRatio,
         speechSegments: audioQuality.speechSegments.length,
@@ -480,6 +498,7 @@ Use os minutos disponíveis sem ultrapassar o total.
         status: "ok",
       });
 
+      stage = "feedback_generation";
       const feedbackResult = await this.createJsonResponse<
         Pick<SpeakingCoachAnalysis, "feedback" | "strengths" | "improvements" | "nextMission" | "nextPhrase" | "patterns">
       >({
@@ -557,6 +576,7 @@ Return valid JSON exactly in this format:
           level: input.level ?? "A1",
         }),
       });
+      stage = "feedback_language_check";
       const localizedFeedbackResult = await this.ensureSpeakingCoachFeedbackLanguage({
         settings,
         feedback: feedbackResult,
@@ -594,6 +614,7 @@ Return valid JSON exactly in this format:
       const localizedResult = result;
       const metrics = metricsToMap(localizedResult.metrics);
       const correctedWords = comparison.missingWords.slice(0, 12);
+      stage = "save_attempt";
       await this.aiRepository.saveSpeakingAttempt({
         userId: input.userId,
         expectedText: input.targetPhrase,
@@ -625,16 +646,35 @@ Return valid JSON exactly in this format:
         status: "ok",
       });
 
+      console.info("[ai:speaking-coach] completed", {
+        requestId,
+        stage: "completed",
+        fileSizeBytes: input.audioBuffer.length,
+        mimeType: input.audioMimeType,
+        durationSeconds: audioQuality.durationSeconds,
+        providerStatus: "ok",
+        processingMs: Date.now() - startedAt,
+      });
+
       return {
         ...localizedResult,
         mode: "ai",
       };
     } catch (error) {
-      console.error("[ai:speaking-coach] analysis failed", error instanceof Error ? error.message : error);
+      const providerStatus = typeof error === "object" && error && "status" in error ? Number(error.status) : undefined;
+      console.error("[ai:speaking-coach] analysis failed", {
+        requestId,
+        stage,
+        fileSizeBytes: input.audioBuffer.length,
+        mimeType: input.audioMimeType,
+        providerStatus,
+        processingMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+      });
       if (error instanceof SpeakingCoachValidationError) {
         throw new AiProviderError(error.message, error.statusCode, error.status);
       }
-      const status = typeof error === "object" && error && "status" in error ? Number(error.status) : undefined;
+      const status = providerStatus;
       if (status === 401) {
         throw new AiProviderError("OpenAI API key is invalid. Update OPENAI_API_KEY and restart the backend.", 401);
       }

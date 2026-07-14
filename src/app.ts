@@ -79,7 +79,7 @@ const onboardingController = new OnboardingController(
 );
 const dailyPlanController = new DailyPlanController(dailyPlanService);
 const learningController = new LearningController(learningService);
-const aiController = new AiController(openAiService, dailyPlanService);
+const aiController = new AiController(openAiService, dailyPlanService, learningService);
 const practiceController = new PracticeController(practiceService);
 const settingsController = new SettingsController(settingsService);
 

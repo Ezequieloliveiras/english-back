@@ -12,6 +12,7 @@ import {
   CompetencyProgress,
   DailyLearningContext,
   LearningRoadmapPayload,
+  StudyBlockType,
   UserLevelProgress,
 } from "../types";
 
@@ -117,6 +118,61 @@ const categoryKey = (category: Competency["category"]) => {
   return category;
 };
 
+const skillKey = (value: unknown) => {
+  if (value === "thinking_in_english") {
+    return "thinkingInEnglish";
+  }
+
+  return typeof value === "string" ? value : "";
+};
+
+const moduleEvidenceConfig: Record<
+  StudyBlockType,
+  {
+    type: CompetencyEvidence["type"];
+    score: number;
+    skills: string[];
+    categories: Competency["category"][];
+  }
+> = {
+  shadowing: {
+    type: "practice_completion",
+    score: 68,
+    skills: ["speaking", "pronunciation", "fluency", "retention"],
+    categories: ["speaking", "pronunciation", "fluency", "vocabulary"],
+  },
+  "speaking-coach": {
+    type: "pronunciation_analysis",
+    score: 70,
+    skills: ["pronunciation", "speaking", "fluency"],
+    categories: ["speaking", "pronunciation", "fluency", "interaction"],
+  },
+  listening: {
+    type: "listening_attempt",
+    score: 65,
+    skills: ["listening", "retention"],
+    categories: ["listening", "interaction"],
+  },
+  vocabulary: {
+    type: "vocabulary_recall",
+    score: 68,
+    skills: ["vocabulary", "retention"],
+    categories: ["vocabulary", "speaking", "interaction"],
+  },
+  conversation: {
+    type: "conversation_task",
+    score: 68,
+    skills: ["interaction", "speaking", "fluency", "vocabulary"],
+    categories: ["interaction", "speaking", "fluency", "vocabulary"],
+  },
+  review: {
+    type: "retention_review",
+    score: 70,
+    skills: ["retention", "vocabulary"],
+    categories: ["vocabulary", "speaking", "interaction"],
+  },
+};
+
 export class LearningService {
   getRoadmap(): LearningRoadmapPayload {
     return {
@@ -171,6 +227,9 @@ export class LearningService {
       userId,
       competencyId: { $in: required },
     });
+    const competenciesInProgress = progressEntries.filter(
+      (entry) => entry.status !== "mastered" && (entry.evidence?.length ?? 0) > 0
+    ).length;
     const competenciesMastered = progressEntries.filter((entry) => entry.status === "mastered").length;
     const competenciesRequired = required.length;
     const levelProgress = competenciesRequired
@@ -189,6 +248,7 @@ export class LearningService {
           currentLevel,
           targetLevel: getTargetLevel(currentLevel, user.primaryGoal),
           levelProgress,
+          competenciesInProgress,
           competenciesMastered,
           competenciesRequired,
           checkpointStatus,
@@ -202,6 +262,7 @@ export class LearningService {
       currentLevel: normalizeCEFRLevel(saved.currentLevel),
       targetLevel: normalizeCEFRLevel(saved.targetLevel),
       levelProgress: saved.levelProgress,
+      competenciesInProgress,
       competenciesMastered: saved.competenciesMastered,
       competenciesRequired: saved.competenciesRequired,
       checkpointStatus: saved.checkpointStatus,
@@ -236,6 +297,21 @@ export class LearningService {
       const key = categoryKey(competency.category);
       buckets.set(key, [...(buckets.get(key) ?? []), progress.masteryScore]);
       buckets.set("retention", [...(buckets.get("retention") ?? []), progress.retentionScore]);
+
+      for (const evidence of progress.evidence) {
+        const skills = Array.isArray(evidence.metadata?.skills)
+          ? evidence.metadata.skills
+          : evidence.metadata?.skill
+            ? [evidence.metadata.skill]
+            : [];
+
+        for (const skill of skills) {
+          const evidenceKey = skillKey(skill);
+          if (evidenceKey) {
+            buckets.set(evidenceKey, [...(buckets.get(evidenceKey) ?? []), evidence.score]);
+          }
+        }
+      }
     }
 
     for (const [key, values] of buckets) {
@@ -263,6 +339,10 @@ export class LearningService {
         const mastered = levelCompetencies.filter(
           (competency) => progressByCompetency.get(competency.id)?.status === "mastered"
         ).length;
+        const inProgress = levelCompetencies.filter((competency) => {
+          const progress = progressByCompetency.get(competency.id);
+          return progress && progress.status !== "mastered" && progress.evidence.length > 0;
+        }).length;
 
         return {
           ...level,
@@ -273,8 +353,9 @@ export class LearningService {
                 ? "current"
                 : "locked",
           progress: levelCompetencies.length
-            ? clampScore((mastered / levelCompetencies.length) * 100)
+            ? clampScore(((mastered + inProgress * 0.35) / levelCompetencies.length) * 100)
             : 0,
+          competenciesInProgress: inProgress,
           competenciesMastered: mastered,
           competenciesTotal: levelCompetencies.length,
         };
@@ -436,6 +517,84 @@ export class LearningService {
     };
   }
 
+  private async resolveCurrentCompetencyIds(input: {
+    userId: string;
+    moduleType: StudyBlockType;
+    competencyIds?: string[];
+  }) {
+    if (Array.isArray(input.competencyIds) && input.competencyIds.length > 0) {
+      return input.competencyIds;
+    }
+
+    const user = await UserModel.findById(input.userId);
+    const currentLevel = normalizeCEFRLevel(user?.currentLevel);
+    const date = todayKey();
+    const dailyPlan = await DailyPlanModel.findOne({ userId: input.userId, date });
+    const planCompetencyIds = Array.isArray(dailyPlan?.targetCompetencies)
+      ? dailyPlan.targetCompetencies
+      : [];
+    const unit =
+      (dailyPlan?.learningUnitId
+        ? learningUnits.find((entry) => entry.id === dailyPlan.learningUnitId)
+        : null) ??
+      learningUnits.find((entry) => entry.level === currentLevel && entry.status === "published") ??
+      learningUnits.find((entry) => entry.status === "published");
+    const candidateIds = planCompetencyIds.length ? planCompetencyIds : unit?.competencies ?? [];
+    const config = moduleEvidenceConfig[input.moduleType];
+    const matching = candidateIds.filter((competencyId) => {
+      const competency = this.getCompetency(competencyId);
+      return competency ? config.categories.includes(competency.category) : false;
+    });
+
+    return matching.length ? matching : candidateIds;
+  }
+
+  async recordPracticeCompletionEvidence(input: {
+    userId: string;
+    moduleType: StudyBlockType;
+    sourceId?: string;
+    score?: number;
+    competencyIds?: string[];
+    metadata?: Record<string, unknown>;
+  }) {
+    const config = moduleEvidenceConfig[input.moduleType];
+    const competencyIds = await this.resolveCurrentCompetencyIds({
+      userId: input.userId,
+      moduleType: input.moduleType,
+      competencyIds: input.competencyIds,
+    });
+
+    if (competencyIds.length === 0) {
+      console.warn("[learning:evidence] no competencies resolved", {
+        userId: input.userId,
+        moduleType: input.moduleType,
+        sourceId: input.sourceId,
+      });
+      return [];
+    }
+
+    const score = clampScore(input.score ?? config.score);
+
+    return Promise.all(
+      competencyIds.map((competencyId) =>
+        this.recordEvidence({
+          userId: input.userId,
+          competencyId,
+          evidence: {
+            type: config.type,
+            score,
+            sourceId: input.sourceId,
+            metadata: {
+              ...(input.metadata ?? {}),
+              moduleType: input.moduleType,
+              skills: config.skills,
+            },
+          },
+        })
+      )
+    );
+  }
+
   async recordListeningAttemptEvidence(input: {
     userId: string;
     exerciseId: string;
@@ -447,7 +606,11 @@ export class LearningService {
     replayCount?: number;
     unknownWords?: string[];
   }) {
-    const competencyIds = Array.isArray(input.competencyIds) ? input.competencyIds : [];
+    const competencyIds = await this.resolveCurrentCompetencyIds({
+      userId: input.userId,
+      moduleType: "listening",
+      competencyIds: input.competencyIds,
+    });
 
     if (competencyIds.length === 0) {
       return [];
@@ -471,6 +634,8 @@ export class LearningService {
               slowAudioUsed: Boolean(input.slowAudioUsed),
               replayCount: Math.max(0, Number(input.replayCount ?? 0)),
               unknownWords: input.unknownWords ?? [],
+              moduleType: "listening",
+              skills: moduleEvidenceConfig.listening.skills,
             },
           },
         })

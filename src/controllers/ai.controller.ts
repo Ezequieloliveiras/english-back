@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { DailyPlanService } from "../services/dailyPlan.service";
+import { LearningService } from "../services/learning.service";
 import { AiProviderError, OpenAiService } from "../services/openai.service";
 
 const MAX_MESSAGE_LENGTH = 1600;
@@ -35,7 +36,8 @@ const validateUserMessage = (body: { message?: string }, response: Response) => 
 export class AiController {
   constructor(
     private readonly openAiService: OpenAiService,
-    private readonly dailyPlanService?: DailyPlanService
+    private readonly dailyPlanService?: DailyPlanService,
+    private readonly learningService?: LearningService
   ) {}
 
   conversation = async (request: AuthenticatedRequest, response: Response) => {
@@ -138,6 +140,8 @@ export class AiController {
   };
 
   speakingCoach = async (request: AuthenticatedRequest, response: Response) => {
+    const requestId = `sc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const startedAt = Date.now();
     try {
       if (!request.auth?.userId) return sendSafeError(response, 401, "Authentication required");
       const { targetPhrase, focus, context, level } = request.body;
@@ -152,6 +156,13 @@ export class AiController {
         return;
       }
 
+      console.info("[ai:speaking-coach] upload accepted", {
+        requestId,
+        stage: "upload",
+        fileSizeBytes: request.file.size,
+        mimeType: request.file.mimetype,
+      });
+
       const result = await this.openAiService.analyzeSpeakingCoachAttempt({
         userId: request.auth.userId,
         audioBuffer: request.file.buffer,
@@ -160,6 +171,7 @@ export class AiController {
         focus,
         context,
         level,
+        requestId,
       });
       await this.dailyPlanService?.recordBlockEvidence({
         userId: request.auth.userId,
@@ -167,8 +179,33 @@ export class AiController {
         evidenceType: "pronunciation_analysis",
         evidenceRef: targetPhrase.trim(),
       });
+      await this.learningService?.recordPracticeCompletionEvidence({
+        userId: request.auth.userId,
+        moduleType: "speaking-coach",
+        sourceId: targetPhrase.trim(),
+        score: Math.round(result.overallScore * 10),
+        metadata: {
+          targetPhrase: targetPhrase.trim(),
+          transcript: result.transcript,
+          overallScore: result.overallScore,
+          metrics: result.metrics,
+          comparison: result.comparison,
+          audioQuality: result.audioQuality,
+        },
+      });
+      console.info("[ai:speaking-coach] response sent", {
+        requestId,
+        stage: "response",
+        processingMs: Date.now() - startedAt,
+      });
       response.json(result);
     } catch (error) {
+      console.error("[ai:speaking-coach] request failed", {
+        requestId,
+        stage: "controller",
+        processingMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+      });
       sendAiError(response, error, "AI speaking coach analysis failed");
     }
   };

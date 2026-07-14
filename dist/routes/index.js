@@ -31,7 +31,10 @@ const handleSpeakingCoachUpload = (request, response, next) => {
             });
             return;
         }
-        response.status(415).json({ message: error instanceof Error ? error.message : "Unsupported audio upload" });
+        response.status(415).json({
+            message: error instanceof Error ? error.message : "Unsupported audio upload",
+            status: "processing_error",
+        });
     });
 };
 const buildRouter = (contentController, audioController, authController, conversationController, reviewController, onboardingController, dailyPlanController, learningController, aiController, practiceController, settingsController) => {

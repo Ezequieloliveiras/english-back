@@ -4,6 +4,11 @@ import { ProfilePlanService } from "../services/profilePlan.service";
 
 const buildDailyPlanService = () =>
   ({
+    updateProfile: jest.fn(async (_userId: string, profile: any) => ({
+      id: "user-1",
+      email: "test@example.com",
+      ...profile,
+    })),
     createPlanForProfile: jest.fn(async (_userId: string, profile: any) => ({
       user: {
         id: "user-1",
@@ -81,5 +86,22 @@ describe("ProfilePlanService professional focus", () => {
     const body = result.body as any;
     expect(body.profile.professionalFocusMode).toBe("standard");
     expect(body.profile.professionValidationStatus).toBe("unchecked");
+  });
+
+  it("updates profile preferences without regenerating today's plan", async () => {
+    const dailyPlanService = buildDailyPlanService();
+    const service = new ProfilePlanService(dailyPlanService);
+
+    const result = await service.updateProfile("user-1", {
+      ...baseInput,
+      professionalFocusMode: "profession",
+    });
+
+    expect(result.status).toBe(200);
+    expect(dailyPlanService.updateProfile).toHaveBeenCalledTimes(1);
+    expect(dailyPlanService.createPlanForProfile).not.toHaveBeenCalled();
+    const body = result.body as any;
+    expect(body.profile.primaryGoal).toBe(baseInput.objective);
+    expect(body.suggestedPlan).toBeUndefined();
   });
 });

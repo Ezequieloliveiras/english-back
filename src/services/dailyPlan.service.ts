@@ -473,6 +473,16 @@ export class DailyPlanService {
     return { user, dailyPlan: plan, progress };
   }
 
+  async updateProfile(userId: string, profile: Partial<UserProfile>) {
+    const user = await this.dailyPlanRepository.updateUserProfile(userId, profile);
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    return user;
+  }
+
   async advanceTodayPlan(userId: string) {
     const resolvedUser = await this.dailyPlanRepository.findUserById(userId);
 

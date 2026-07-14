@@ -54,6 +54,7 @@ const buildRouter = (contentController, audioController, authController, convers
     router.get("/content/bootstrap", auth_middleware_1.requireAuth, contentController.getBootstrap);
     router.post("/conversations/reply", auth_middleware_1.requireAuth, conversationController.reply);
     router.post("/reviews/record", auth_middleware_1.requireAuth, reviewController.record);
+    router.patch("/profile", auth_middleware_1.requireAuth, profilePlanController.updateProfile);
     router.post("/profile/plan", auth_middleware_1.requireAuth, profilePlanController.createPlan);
     router.get("/daily-plans/today", auth_middleware_1.requireAuth, dailyPlanController.getToday);
     router.post("/daily-plans/today/advance", auth_middleware_1.requireAuth, dailyPlanController.advanceToday);

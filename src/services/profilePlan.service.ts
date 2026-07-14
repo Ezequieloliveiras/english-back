@@ -170,17 +170,14 @@ export class ProfilePlanService {
     private readonly userGoalRepository?: UserGoalRepository
   ) {}
 
-  async buildPlan(userId: string, input: ProfilePlanInput) {
+  private prepareProfile(input: ProfilePlanInput) {
     const level = input.level.toUpperCase() as EnglishLevel;
     const professionalFocusMode: UserProfile["professionalFocusMode"] =
       input.professionalFocusMode === "profession" ? "profession" : "standard";
     const validation = validateProfessionalFocus(input.profession, professionalFocusMode);
 
     if (professionalFocusMode === "profession" && validation.status === "rejected") {
-      return {
-        status: 400,
-        body: { message: validation.message },
-      };
+      return { error: validation.message };
     }
 
     const focus =
@@ -192,45 +189,90 @@ export class ProfilePlanService {
             ? "Improve clarity, stress, and connected speech."
             : "Learn reusable phrases in context.";
 
-    const profile = {
-      name: input.name,
-      currentLevel: level,
-      dailyMinutes: input.dailyMinutes,
-      profession: input.profession,
-      professionalFocusMode,
-      professionValidationStatus: validation.status,
-      professionValidationMessage: validation.message,
-      primaryGoal: input.objective,
-      mainDifficulty: input.difficulty,
-      initialSetupCompleted: true,
+    return {
+      focus,
+      level,
+      profile: {
+        name: input.name,
+        currentLevel: level,
+        dailyMinutes: input.dailyMinutes,
+        profession: input.profession,
+        professionalFocusMode,
+        professionValidationStatus: validation.status,
+        professionValidationMessage: validation.message,
+        primaryGoal: input.objective,
+        mainDifficulty: input.difficulty,
+        initialSetupCompleted: true,
+      },
     };
-    const { dailyPlan, progress, user } = await this.dailyPlanService.createPlanForProfile(userId, profile);
+  }
+
+  private async syncGoal(userId: string, input: ProfilePlanInput, level: EnglishLevel) {
     await this.userGoalRepository?.upsertGoal(userId, {
       primaryGoal: input.objective,
       targetLevel: level,
       professionalContext: input.profession,
     });
+  }
+
+  private responseProfile(user: UserProfile) {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      currentLevel: user.currentLevel,
+      dailyMinutes: user.dailyMinutes,
+      profession: user.profession,
+      professionalFocusMode: user.professionalFocusMode,
+      professionValidationStatus: user.professionValidationStatus,
+      professionValidationMessage: user.professionValidationMessage,
+      primaryGoal: user.primaryGoal,
+      mainDifficulty: user.mainDifficulty,
+      initialSetupCompleted: user.initialSetupCompleted,
+    };
+  }
+
+  async updateProfile(userId: string, input: ProfilePlanInput) {
+    const prepared = this.prepareProfile(input);
+
+    if ("error" in prepared) {
+      return {
+        status: 400,
+        body: { message: prepared.error },
+      };
+    }
+
+    const user = await this.dailyPlanService.updateProfile(userId, prepared.profile);
+    await this.syncGoal(userId, input, prepared.level);
+
+    return {
+      status: 200,
+      body: {
+        profile: this.responseProfile(user),
+      },
+    };
+  }
+
+  async buildPlan(userId: string, input: ProfilePlanInput) {
+    const prepared = this.prepareProfile(input);
+
+    if ("error" in prepared) {
+      return {
+        status: 400,
+        body: { message: prepared.error },
+      };
+    }
+
+    const { dailyPlan, progress, user } = await this.dailyPlanService.createPlanForProfile(userId, prepared.profile);
+    await this.syncGoal(userId, input, prepared.level);
 
     return {
       status: 201,
       body: {
-        profile: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          currentLevel: user.currentLevel,
-          dailyMinutes: user.dailyMinutes,
-          profession: user.profession,
-          professionalFocusMode: user.professionalFocusMode,
-          professionValidationStatus: user.professionValidationStatus,
-          professionValidationMessage: user.professionValidationMessage,
-          primaryGoal: user.primaryGoal,
-          mainDifficulty: user.mainDifficulty,
-          initialSetupCompleted: user.initialSetupCompleted,
-        },
+        profile: this.responseProfile(user),
         suggestedPlan: {
           ...dailyPlan,
-          focus: dailyPlan.focus || focus,
+          focus: dailyPlan.focus || prepared.focus,
         },
         progress,
       },

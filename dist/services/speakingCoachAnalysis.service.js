@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validateTranscriptComparison = exports.deriveSpeakingMetrics = exports.buildSpeakingCoachPipeline = exports.comparePhraseToTranscript = exports.normalizeSpeechWords = exports.normalizeAndAnalyzeAudio = exports.analyzePcmWav = exports.speakingAudioExtension = exports.isSupportedSpeakingAudioMime = exports.SpeakingCoachValidationError = void 0;
+exports.buildSpeechAnalysisResult = exports.buildWordAnalysis = exports.validateTranscriptComparison = exports.deriveSpeakingMetrics = exports.buildSpeakingCoachPipeline = exports.comparePhraseToTranscript = exports.normalizeSpeechWords = exports.normalizeAndAnalyzeAudio = exports.analyzePcmWav = exports.speakingAudioExtension = exports.isSupportedSpeakingAudioMime = exports.SpeakingCoachValidationError = void 0;
 const child_process_1 = require("child_process");
 const promises_1 = require("fs/promises");
 const os_1 = require("os");
@@ -190,10 +190,10 @@ const analyzePcmWav = (buffer) => {
 exports.analyzePcmWav = analyzePcmWav;
 const normalizeAndAnalyzeAudio = async (input) => {
     if (input.buffer.length < MIN_AUDIO_BYTES) {
-        throw new SpeakingCoachValidationError("too_short", "A gravação está vazia ou curta demais.", 422);
+        throw new SpeakingCoachValidationError("too_short", "A gravaÃ§Ã£o estÃ¡ vazia ou curta demais.", 422);
     }
     if (!(0, exports.isSupportedSpeakingAudioMime)(input.mimeType)) {
-        throw new SpeakingCoachValidationError("processing_error", "Formato de áudio não suportado.", 415);
+        throw new SpeakingCoachValidationError("processing_error", "Formato de Ã¡udio nÃ£o suportado.", 415);
     }
     const dir = await (0, promises_1.mkdtemp)(path_1.default.join((0, os_1.tmpdir)(), "english-os-speaking-"));
     const inputPath = path_1.default.join(dir, `input.${(0, exports.speakingAudioExtension)(input.mimeType)}`);
@@ -204,16 +204,16 @@ const normalizeAndAnalyzeAudio = async (input) => {
         const wavBuffer = await (0, promises_1.readFile)(wavPath);
         const audioQuality = (0, exports.analyzePcmWav)(wavBuffer);
         if (audioQuality.durationSeconds > MAX_DURATION_SECONDS) {
-            throw new SpeakingCoachValidationError("processing_error", "A gravação está longa demais para análise.", 400, audioQuality);
+            throw new SpeakingCoachValidationError("processing_error", "A gravaÃ§Ã£o estÃ¡ longa demais para anÃ¡lise.", 400, audioQuality);
         }
         if (audioQuality.durationSeconds < MIN_DURATION_SECONDS) {
-            throw new SpeakingCoachValidationError("too_short", "A gravação foi curta demais para avaliar a frase.", 422, audioQuality);
+            throw new SpeakingCoachValidationError("too_short", "A gravaÃ§Ã£o foi curta demais para avaliar a frase.", 422, audioQuality);
         }
         if (audioQuality.rms < MIN_RMS || audioQuality.peak < MIN_PEAK) {
             throw new SpeakingCoachValidationError("no_speech", "Nenhuma fala foi detectada.", 422, audioQuality);
         }
         if (audioQuality.speechRatio < MIN_SPEECH_RATIO) {
-            throw new SpeakingCoachValidationError("unclear_audio", "Não foi possível compreender sua voz.", 422, audioQuality);
+            throw new SpeakingCoachValidationError("unclear_audio", "NÃ£o foi possÃ­vel compreender sua voz.", 422, audioQuality);
         }
         return { wavBuffer, audioQuality };
     }
@@ -560,11 +560,79 @@ const validateTranscriptComparison = (transcript, audioQuality, comparison) => {
         throw new SpeakingCoachValidationError("no_speech", "Nenhuma fala foi detectada.", 422, audioQuality, comparison, transcript);
     }
     if (comparison.spokenWords.length < Math.max(2, Math.ceil(comparison.expectedWords.length * 0.25))) {
-        throw new SpeakingCoachValidationError("too_short", "A gravação foi curta demais para avaliar a frase.", 422, audioQuality, comparison, transcript);
+        throw new SpeakingCoachValidationError("too_short", "A gravaÃ§Ã£o foi curta demais para avaliar a frase.", 422, audioQuality, comparison, transcript);
     }
     if (comparison.coverage < MIN_COVERAGE_FOR_VALID_ATTEMPT ||
         comparison.similarity < MIN_SIMILARITY_FOR_VALID_ATTEMPT) {
-        throw new SpeakingCoachValidationError("wrong_phrase", "A gravação não corresponde à frase de treino.", 422, audioQuality, comparison, transcript);
+        throw new SpeakingCoachValidationError("wrong_phrase", "A gravaÃ§Ã£o nÃ£o corresponde Ã  frase de treino.", 422, audioQuality, comparison, transcript);
     }
 };
 exports.validateTranscriptComparison = validateTranscriptComparison;
+const wordAnalysisStatus = (status) => {
+    if (status === "exact")
+        return "correct";
+    if (status === "substitution")
+        return "mispronounced";
+    return status;
+};
+const wordExplanationPtBr = (analysis) => {
+    switch (analysis.status) {
+        case "correct":
+            return undefined;
+        case "missing":
+            return `Você deixou de falar "${analysis.expected}". Ouça novamente e tente repetir a frase completa.`;
+        case "extra":
+            return `Foi identificado "${analysis.spoken}" como palavra extra. Tente repetir apenas a frase de treino.`;
+        case "mispronounced":
+        default:
+            return `Você falou "${analysis.spoken}", mas a forma esperada é "${analysis.expected}". Ouça novamente e tente repetir essa parte.`;
+    }
+};
+const buildWordAnalysis = (alignment, confidence) => alignment.map((item) => {
+    const analysis = {
+        spoken: item.spokenWord ?? "",
+        expected: item.expectedWord ?? "",
+        status: wordAnalysisStatus(item.status),
+        start: item.start,
+        end: item.end,
+        confidence,
+    };
+    return {
+        ...analysis,
+        explanationPtBr: wordExplanationPtBr(analysis),
+    };
+});
+exports.buildWordAnalysis = buildWordAnalysis;
+const buildFallbackFeedbackPtBr = (wordAnalysis, isCorrect) => {
+    if (isCorrect) {
+        return "Boa tentativa. A fala corresponde à frase esperada.";
+    }
+    const issue = wordAnalysis.find((item) => item.status !== "correct");
+    if (!issue) {
+        return "Não foi possível confirmar a frase com segurança. Ouça novamente e tente repetir.";
+    }
+    return issue.explanationPtBr ?? "Ouça novamente e tente repetir a frase esperada.";
+};
+const buildSpeechAnalysisResult = (input) => {
+    const confidence = Number(Math.max(0, Math.min(1, (input.comparison.coverage + input.comparison.similarity) / 2)).toFixed(3));
+    const normalizedTranscript = (0, exports.normalizeSpeechWords)(input.rawTranscript).join(" ");
+    const isCorrect = input.comparison.missingWords.length === 0 &&
+        input.comparison.extraWords.length === 0 &&
+        input.alignment.every((item) => item.status === "exact");
+    const wordAnalysis = (0, exports.buildWordAnalysis)(input.alignment, confidence);
+    return {
+        rawTranscript: input.rawTranscript,
+        normalizedTranscript,
+        expectedText: input.expectedText,
+        correctedText: isCorrect ? undefined : input.expectedText,
+        feedbackPtBr: input.feedbackPtBr ?? buildFallbackFeedbackPtBr(wordAnalysis, isCorrect),
+        detectedLanguage: input.detectedLanguage ?? input.transcriptionLanguage,
+        targetLanguage: input.targetLanguage,
+        transcriptionLanguage: input.transcriptionLanguage,
+        translated: input.translated ?? false,
+        isCorrect,
+        confidence,
+        wordAnalysis,
+    };
+};
+exports.buildSpeechAnalysisResult = buildSpeechAnalysisResult;

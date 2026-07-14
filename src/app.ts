@@ -1,4 +1,4 @@
-import cors, { CorsOptions } from "cors";
+﻿import cors, { CorsOptions } from "cors";
 import cookieParser from "cookie-parser";
 import express from "express";
 import helmet from "helmet";
@@ -31,6 +31,7 @@ import { ContentService } from "./services/content.service";
 import { ConversationService } from "./services/conversation.service";
 import { DailyPlanService } from "./services/dailyPlan.service";
 import { OpenAiService } from "./services/openai.service";
+import { LearningPreferencesService } from "./services/learningPreferences.service";
 import { PracticeService } from "./services/practice.service";
 import { ProgressService } from "./services/progress.service";
 import { ProfilePlanService } from "./services/profilePlan.service";
@@ -48,14 +49,16 @@ const userGoalRepository = new UserGoalRepository();
 const settingsRepository = new SettingsRepository(userGoalRepository);
 
 const audioStorageService = new AudioStorageService();
+const settingsService = new SettingsService(settingsRepository);
+const learningPreferencesService = new LearningPreferencesService(settingsRepository);
 const audioService = new AudioService(
   audioCacheRepository,
-  audioStorageService
+  audioStorageService,
+  learningPreferencesService
 );
 const authService = new AuthService(authRepository);
-const settingsService = new SettingsService(settingsRepository);
 const progressService = new ProgressService(progressRepository);
-const openAiService = new OpenAiService(aiRepository, settingsRepository, progressService);
+const openAiService = new OpenAiService(aiRepository, learningPreferencesService, progressService);
 const dailyPlanService = new DailyPlanService(dailyPlanRepository, progressService);
 const conversationService = new ConversationService(openAiService, dailyPlanService);
 const reviewService = new ReviewService(contentRepository, dailyPlanService, progressService);
@@ -95,7 +98,7 @@ const allowedOrigins = env.corsOrigin.map((origin) =>
 
 const corsOptions: CorsOptions = {
   origin(origin, callback) {
-    // Postman, curl e comunicações servidor-servidor podem não enviar Origin.
+    // Postman, curl e comunicaÃ§Ãµes servidor-servidor podem nÃ£o enviar Origin.
     if (!origin) {
       return callback(null, true);
     }
@@ -108,7 +111,7 @@ const corsOptions: CorsOptions = {
     }
 
     return callback(
-      new Error(`Origem não permitida pelo CORS: ${origin}`)
+      new Error(`Origem nÃ£o permitida pelo CORS: ${origin}`)
     );
   },
   credentials: true,
@@ -148,14 +151,14 @@ app.use(express.json({ limit: "15mb" }));
 app.use((req, res, next) => {
   const start = Date.now();
 
-  console.log("────────────────────────────────────────");
+  console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
   console.log(`[${new Date().toISOString()}]`);
   console.log(`${req.method} ${req.originalUrl}`);
   console.log("Origin:", req.headers.origin ?? "sem origin");
 
   res.on("finish", () => {
-    console.log(`→ ${res.statusCode} (${Date.now() - start}ms)`);
-    console.log("────────────────────────────────────────");
+    console.log(`â†’ ${res.statusCode} (${Date.now() - start}ms)`);
+    console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
   });
 
   next();
@@ -176,3 +179,5 @@ app.use(
     settingsController
   )
 )
+
+

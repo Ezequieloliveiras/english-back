@@ -37,6 +37,7 @@ const content_service_1 = require("./services/content.service");
 const conversation_service_1 = require("./services/conversation.service");
 const dailyPlan_service_1 = require("./services/dailyPlan.service");
 const openai_service_1 = require("./services/openai.service");
+const learningPreferences_service_1 = require("./services/learningPreferences.service");
 const practice_service_1 = require("./services/practice.service");
 const progress_service_1 = require("./services/progress.service");
 const profilePlan_service_1 = require("./services/profilePlan.service");
@@ -52,11 +53,12 @@ const progressRepository = new progress_repository_1.ProgressRepository();
 const userGoalRepository = new userGoal_repository_1.UserGoalRepository();
 const settingsRepository = new settings_repository_1.SettingsRepository(userGoalRepository);
 const audioStorageService = new audioStorage_service_1.AudioStorageService();
-const audioService = new audio_service_1.AudioService(audioCacheRepository, audioStorageService);
-const authService = new auth_service_1.AuthService(authRepository);
 const settingsService = new settings_service_1.SettingsService(settingsRepository);
+const learningPreferencesService = new learningPreferences_service_1.LearningPreferencesService(settingsRepository);
+const audioService = new audio_service_1.AudioService(audioCacheRepository, audioStorageService, learningPreferencesService);
+const authService = new auth_service_1.AuthService(authRepository);
 const progressService = new progress_service_1.ProgressService(progressRepository);
-const openAiService = new openai_service_1.OpenAiService(aiRepository, settingsRepository, progressService);
+const openAiService = new openai_service_1.OpenAiService(aiRepository, learningPreferencesService, progressService);
 const dailyPlanService = new dailyPlan_service_1.DailyPlanService(dailyPlanRepository, progressService);
 const conversationService = new conversation_service_1.ConversationService(openAiService, dailyPlanService);
 const reviewService = new review_service_1.ReviewService(contentRepository, dailyPlanService, progressService);
@@ -77,7 +79,7 @@ exports.app = (0, express_1.default)();
 const allowedOrigins = env_1.env.corsOrigin.map((origin) => origin.trim().replace(/\/$/, ""));
 const corsOptions = {
     origin(origin, callback) {
-        // Postman, curl e comunicações servidor-servidor podem não enviar Origin.
+        // Postman, curl e comunicaÃ§Ãµes servidor-servidor podem nÃ£o enviar Origin.
         if (!origin) {
             return callback(null, true);
         }
@@ -86,7 +88,7 @@ const corsOptions = {
         if (isAllowed) {
             return callback(null, true);
         }
-        return callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
+        return callback(new Error(`Origem nÃ£o permitida pelo CORS: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -117,13 +119,13 @@ exports.app.use((0, cookie_parser_1.default)());
 exports.app.use(express_1.default.json({ limit: "15mb" }));
 exports.app.use((req, res, next) => {
     const start = Date.now();
-    console.log("────────────────────────────────────────");
+    console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     console.log(`[${new Date().toISOString()}]`);
     console.log(`${req.method} ${req.originalUrl}`);
     console.log("Origin:", req.headers.origin ?? "sem origin");
     res.on("finish", () => {
-        console.log(`→ ${res.statusCode} (${Date.now() - start}ms)`);
-        console.log("────────────────────────────────────────");
+        console.log(`â†’ ${res.statusCode} (${Date.now() - start}ms)`);
+        console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     });
     next();
 });

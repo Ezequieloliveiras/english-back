@@ -36,6 +36,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OpenAiService = exports.AiProviderError = void 0;
 const openai_1 = __importStar(require("openai"));
 const env_1 = require("../config/env");
+const learningPreferences_service_1 = require("./learningPreferences.service");
+const promptContext_service_1 = require("./promptContext.service");
+const translationValidator_1 = require("../utils/translationValidator");
 const speakingCoachAnalysis_service_1 = require("./speakingCoachAnalysis.service");
 class AiProviderError extends Error {
     constructor(message, statusCode = 503, code) {
@@ -46,18 +49,18 @@ class AiProviderError extends Error {
 }
 exports.AiProviderError = AiProviderError;
 const basePrompt = `
-Você é um professor de inglês sênior com mais de 20 anos de experiência.
-Seu aluno é iniciante e precisa aprender inglês rapidamente para se comunicar.
-Priorize fala, listening, frases úteis e confiança.
+VocÃª Ã© um professor de inglÃªs sÃªnior com mais de 20 anos de experiÃªncia.
+Seu aluno Ã© iniciante e precisa aprender inglÃªs rapidamente para se comunicar.
+Priorize fala, listening, frases Ãºteis e confianÃ§a.
 Corrija somente erros importantes.
-Não interrompa a fluência por pequenos erros.
-Use inglês simples, nível A1/A2, nas frases de treino e nas respostas que o aluno deve praticar.
-Quando o usuário estiver com suporte em português, explique instruções, feedback e raciocínio pedagógico em português brasileiro.
-Nunca dê aulas longas de gramática.
-Faça perguntas curtas para manter a conversa.
+NÃ£o interrompa a fluÃªncia por pequenos erros.
+Use inglÃªs simples, nÃ­vel A1/A2, nas frases de treino e nas respostas que o aluno deve praticar.
+Quando o usuÃ¡rio estiver com suporte em portuguÃªs, explique instruÃ§Ãµes, feedback e raciocÃ­nio pedagÃ³gico em portuguÃªs brasileiro.
+Nunca dÃª aulas longas de gramÃ¡tica.
+FaÃ§a perguntas curtas para manter a conversa.
 Use frases naturais do dia a dia.
-Quando o modo for desenvolvedor, use contexto de programação, APIs, bugs, deploy, banco de dados, frontend, backend e reuniões técnicas.
-Retorne sempre JSON válido, sem markdown.
+Quando o modo for desenvolvedor, use contexto de programaÃ§Ã£o, APIs, bugs, deploy, banco de dados, frontend, backend e reuniÃµes tÃ©cnicas.
+Retorne sempre JSON vÃ¡lido, sem markdown.
 `;
 const developerContexts = `
 Developer prompts:
@@ -68,7 +71,7 @@ Developer prompts:
 - participar de daily
 - explicar pull request
 - falar com cliente
-Use frases curtas e naturais para contexto técnico.
+Use frases curtas e naturais para contexto tÃ©cnico.
 `;
 const parseJson = (text) => {
     const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
@@ -117,9 +120,7 @@ const findLowestSpeakingMetric = (metrics) => {
     ].filter((entry) => typeof entry[1] === "number");
     return candidates.sort((a, b) => a[1] - b[1])[0]?.[0] ?? "Not enough data yet";
 };
-const languageInstruction = (settings) => settings.languageMode === "full_english"
-    ? "The user selected full English. Return all explanations, corrections, suggestions, titles and labels in English only."
-    : "The user selected Portuguese support. Explain pedagogy in Brazilian Portuguese when helpful, but keep English corrections, example phrases and natural suggestions in English.";
+const languageInstruction = (preferences) => promptContext_service_1.PromptContextBuilder.build(preferences);
 const englishPedagogyPattern = /\b(you said|you pronounced|you missed|you used|you added|your pronunciation|your rhythm|your recording|good rhythm|clear pronunciation|connected speech|add the|missing word|instead of|people often|it sounds|sounds more|improve intonation|practice saying|try saying)\b/i;
 const hasEnglishPedagogyWhenPortugueseNeeded = (settings, feedback) => {
     if (settings.languageMode === "full_english") {
@@ -142,9 +143,9 @@ const hasEnglishPedagogyWhenPortugueseNeeded = (settings, feedback) => {
     return texts.some((text) => englishPedagogyPattern.test(text.replace(/"[^"]+"/g, "")));
 };
 class OpenAiService {
-    constructor(aiRepository, settingsRepository, progressService) {
+    constructor(aiRepository, learningPreferencesService, progressService) {
         this.aiRepository = aiRepository;
-        this.settingsRepository = settingsRepository;
+        this.learningPreferencesService = learningPreferencesService;
         this.progressService = progressService;
         this.client = env_1.env.openAiApiKey
             ? new openai_1.default({ apiKey: env_1.env.openAiApiKey, maxRetries: 0, timeout: 20000 })
@@ -245,7 +246,7 @@ ${languageInstruction(settings)}
 Return this JSON shape:
 {"reply":"short answer","correction":"short correction if needed","suggestedPhrase":"better phrase","nextQuestion":"short next question","level":"A1"}
 Modo escolhido: ${input.mode}
-Nível: ${input.level ?? "A1"}
+NÃ­vel: ${input.level ?? "A1"}
 Objetivo: ${input.goal ?? "comunicacao real"}
 `,
             userContent: JSON.stringify({
@@ -273,9 +274,9 @@ ${developerContexts}
 ${languageInstruction(settings)}
 Return this JSON shape:
 {"reply":"short answer","correction":"short correction if needed","suggestedPhrase":"better technical phrase","nextQuestion":"short technical next question","level":"A1"}
-Modo técnico: ${input.mode}
-Nível: ${input.level ?? "A1"}
-Objetivo: ${input.goal ?? "inglês técnico para trabalho"}
+Modo tÃ©cnico: ${input.mode}
+NÃ­vel: ${input.level ?? "A1"}
+Objetivo: ${input.goal ?? "inglÃªs tÃ©cnico para trabalho"}
 `,
             userContent: JSON.stringify({
                 recentHistory: storedHistory.length ? storedHistory : limitMessages(input.previousMessages),
@@ -298,7 +299,7 @@ Objetivo: ${input.goal ?? "inglês técnico para trabalho"}
             mode: "think-in-english",
             instructions: `
 ${languageInstruction(settings)}
-Se o usuário pedir tradução palavra por palavra, incentive a descrição em inglês primeiro.
+Se o usuÃ¡rio pedir traduÃ§Ã£o palavra por palavra, incentive a descriÃ§Ã£o em inglÃªs primeiro.
 Return this JSON shape:
 {"reply":"short answer in simple English","correction":"","suggestedPhrase":"useful phrase","nextQuestion":"short question","level":"A1"}
 `,
@@ -312,25 +313,40 @@ Return this JSON shape:
     }
     async generateVocabularyExamples(input) {
         const settings = await this.getUserSettings(input.userId);
-        return this.createJsonResponse({
+        const result = await this.createJsonResponse({
             mode: "vocabulary",
             instructions: `
 ${languageInstruction(settings)}
-Crie vocabulário sempre com frases completas, nunca palavras isoladas.
+Crie vocabulÃ¡rio sempre com frases completas, nunca palavras isoladas.
 Return this JSON shape:
 {"topic":"topic","level":"A1","examples":[{"phrase":"English phrase","translation":"short translation when Portuguese support is enabled, otherwise English meaning","category":"category"}]}
 `,
             userContent: JSON.stringify(input),
         });
+        if (settings.portugueseSupportLevel === "none") {
+            return result;
+        }
+        return {
+            ...result,
+            examples: (result.examples ?? []).map((example) => {
+                const validation = (0, translationValidator_1.validatePortugueseTranslation)(example.phrase, example.translation);
+                return validation.valid
+                    ? example
+                    : {
+                        ...example,
+                        translation: "Tradução em português indisponível.",
+                    };
+            }),
+        };
     }
     async generateDailyPlan(input) {
         return this.createJsonResponse({
             mode: "daily-plan",
             instructions: `
-Monte uma rotina curta de inglês para hoje.
+Monte uma rotina curta de inglÃªs para hoje.
 Retorne:
 {"focus":"foco do dia","blocks":[{"title":"Shadowing","durationMinutes":8,"objective":"objetivo curto"}]}
-Use os minutos disponíveis sem ultrapassar o total.
+Use os minutos disponÃ­veis sem ultrapassar o total.
 `,
             userContent: JSON.stringify(input),
         });
@@ -362,9 +378,10 @@ Use os minutos disponíveis sem ultrapassar o total.
             const transcription = await this.client.audio.transcriptions.create({
                 file: audioFile,
                 model: "gpt-4o-mini-transcribe",
-                language: "en",
+                language: settings.transcriptionLanguage,
             });
             const transcript = transcription.text ?? "";
+            const rawTranscript = transcript;
             stage = "compare_transcript";
             const comparison = (0, speakingCoachAnalysis_service_1.comparePhraseToTranscript)(input.targetPhrase, transcript);
             (0, speakingCoachAnalysis_service_1.validateTranscriptComparison)(transcript, audioQuality, comparison);
@@ -403,21 +420,21 @@ Never just say "wrong". Always teach.
 User preferences:
 - languageMode: ${settings.languageMode}
 - supportLanguageMode: ${settings.supportLanguageMode}
-- preferredAccent: ${settings.preferredAccent}
+- preferredAccent: ${settings.accent}
 - correctionStyle: ${settings.correctionStyle}
 - primaryObjective: ${settings.primaryObjective}
 If languageMode is "pt_explanation_en_correction": write pedagogical explanations in clear Brazilian Portuguese, but keep corrections, spoken phrases and examples in English.
 If languageMode is "full_english": write everything in simple A1/A2 English, including titles, subtitles, explanations, strengths, improvements, nextMission and patterns.
 When forcedAlignment has a substitution, make the first feedback item direct and comparative:
-- In Brazilian Portuguese mode, start whatHappened with: Você pronunciou "spokenWord", mas se diz "expectedWord"...
+- In Brazilian Portuguese mode, start whatHappened with: VocÃª pronunciou "spokenWord", mas se diz "expectedWord"...
 - Then explain the stress, sound, rhythm or syllable emphasis using the available evidence.
-- Example style: Você pronunciou "douctor", mas se diz "doctor", enfatizando a primeira sílaba: "DOC-tor".
+- Example style: VocÃª pronunciou "douctor", mas se diz "doctor", enfatizando a primeira sÃ­laba: "DOC-tor".
 - Keep spokenWord and expectedWord inside quotes exactly as English words.
-When the issue is a missing word, use: Você deixou de falar "expectedWord"...; when it is an extra word, use: Você adicionou "spokenWord"...
+When the issue is a missing word, use: VocÃª deixou de falar "expectedWord"...; when it is an extra word, use: VocÃª adicionou "spokenWord"...
 For Brazilian Portuguese mode, these pedagogical fields must be in Brazilian Portuguese:
 title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence and patterns.exercise.
 Keep only literal quoted English phrases in English, such as "want to", "wanna" and "I wanna talk about my routine.".
-In Brazilian Portuguese mode, do not write phrases like "You said", "Good rhythm", "Practice..." outside quoted examples; write them in Portuguese, like "Você disse...", "Bom ritmo...", "Pratique...".
+In Brazilian Portuguese mode, do not write phrases like "You said", "Good rhythm", "Practice..." outside quoted examples; write them in Portuguese, like "VocÃª disse...", "Bom ritmo...", "Pratique...".
 Return valid JSON exactly in this format:
 {
   "feedback": [
@@ -439,7 +456,7 @@ Return valid JSON exactly in this format:
 `,
                 userContent: JSON.stringify({
                     targetPhrase: input.targetPhrase,
-                    transcriptFromAudio: transcript,
+                    transcriptFromAudio: rawTranscript,
                     audioQuality,
                     forcedAlignment: pipeline.alignment,
                     priorityCorrection: pipeline.alignment.find((item) => item.status === "substitution") ??
@@ -466,10 +483,22 @@ Return valid JSON exactly in this format:
                 settings,
                 feedback: feedbackResult,
             });
+            const speechAnalysis = (0, speakingCoachAnalysis_service_1.buildSpeechAnalysisResult)({
+                rawTranscript,
+                expectedText: input.targetPhrase,
+                targetLanguage: settings.targetLanguage,
+                transcriptionLanguage: settings.transcriptionLanguage,
+                detectedLanguage: settings.transcriptionLanguage,
+                translated: false,
+                comparison,
+                alignment: pipeline.alignment,
+                feedbackPtBr: settings.interfaceLanguage === "pt-BR" ? localizedFeedbackResult.feedback?.[0]?.whatHappened : undefined,
+            });
             const result = {
+                ...speechAnalysis,
                 status: "ok",
                 detectedSpeech: true,
-                transcript,
+                transcript: rawTranscript,
                 audioQuality: {
                     durationSeconds: audioQuality.durationSeconds,
                     speechRatio: audioQuality.speechRatio,
@@ -509,7 +538,17 @@ Return valid JSON exactly in this format:
             const savedAttempt = await this.aiRepository.saveSpeakingAttempt({
                 userId: input.userId,
                 expectedText: input.targetPhrase,
-                transcribedText: transcript,
+                transcribedText: rawTranscript,
+                rawTranscript: speechAnalysis.rawTranscript,
+                normalizedTranscript: speechAnalysis.normalizedTranscript,
+                correctedText: speechAnalysis.correctedText,
+                translated: speechAnalysis.translated,
+                detectedLanguage: speechAnalysis.detectedLanguage,
+                targetLanguage: speechAnalysis.targetLanguage,
+                transcriptionLanguage: speechAnalysis.transcriptionLanguage,
+                feedbackPtBr: speechAnalysis.feedbackPtBr,
+                wordAnalysis: speechAnalysis.wordAnalysis,
+                preferencesVersion: settings.version,
                 pronunciationScore: metrics["Pronunciation Score"] ?? localizedResult.overallScore,
                 naturalnessScore: metrics.Naturalness ?? localizedResult.overallScore,
                 connectedSpeechScore: metrics["Connected Speech"] ?? localizedResult.overallScore,
@@ -517,7 +556,7 @@ Return valid JSON exactly in this format:
                 intonationScore: metrics.Intonation ?? localizedResult.overallScore,
                 rhythmScore: metrics.Rhythm ?? localizedResult.overallScore,
                 fluencyScore: metrics.Fluency ?? localizedResult.overallScore,
-                wordsSpokenCount: countWords(transcript),
+                wordsSpokenCount: countWords(rawTranscript),
                 correctedWords,
                 correctionCount,
                 feedback: localizedResult.feedback,
@@ -542,8 +581,18 @@ Return valid JSON exactly in this format:
                 userId: input.userId,
                 attemptId: String(savedAttempt._id ?? requestId),
                 expectedText: input.targetPhrase,
-                transcribedText: transcript,
-                wordsSpokenCount: countWords(transcript),
+                transcribedText: rawTranscript,
+                rawTranscript: speechAnalysis.rawTranscript,
+                normalizedTranscript: speechAnalysis.normalizedTranscript,
+                correctedText: speechAnalysis.correctedText,
+                translated: speechAnalysis.translated,
+                detectedLanguage: speechAnalysis.detectedLanguage,
+                targetLanguage: speechAnalysis.targetLanguage,
+                transcriptionLanguage: speechAnalysis.transcriptionLanguage,
+                feedbackPtBr: speechAnalysis.feedbackPtBr,
+                wordAnalysis: speechAnalysis.wordAnalysis,
+                preferencesVersion: settings.version,
+                wordsSpokenCount: countWords(rawTranscript),
                 correctedWords,
                 correctionCount,
                 durationSeconds: audioQuality.durationSeconds,
@@ -597,20 +646,10 @@ Return valid JSON exactly in this format:
         }
     }
     async getUserSettings(userId) {
-        if (!this.settingsRepository) {
-            return {
-                userId,
-                languageMode: "pt_explanation_en_correction",
-                supportLanguageMode: "moderate_support",
-                preferredAccent: "american",
-                preferredVoice: "alloy",
-                correctionStyle: "gentle",
-                interfaceLanguage: "pt-BR",
-                primaryObjective: "conversation",
-                dailyMinutes: 20,
-            };
+        if (!this.learningPreferencesService) {
+            return (0, learningPreferences_service_1.defaultEffectiveLearningPreferences)(userId);
         }
-        return this.settingsRepository.findOrCreate(userId);
+        return this.learningPreferencesService.getEffectivePreferences(userId);
     }
     async analyzeStudentMistake(input) {
         const settings = await this.getUserSettings(input.userId);

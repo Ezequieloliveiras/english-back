@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { ConversationSessionModel } from "../models/conversationSession.model";
 import { SpeakingAttemptModel } from "../models/speakingAttempt.model";
 import { StudentMistakeModel } from "../models/studentMistake.model";
@@ -33,6 +33,16 @@ interface SaveSpeakingAttemptInput {
   phraseId?: string;
   expectedText: string;
   transcribedText: string;
+  rawTranscript?: string;
+  normalizedTranscript?: string;
+  correctedText?: string;
+  translated?: boolean;
+  detectedLanguage?: string;
+  targetLanguage?: string;
+  transcriptionLanguage?: string;
+  feedbackPtBr?: string;
+  wordAnalysis?: unknown;
+  preferencesVersion?: number;
   audioUrl?: string;
   pronunciationScore: number;
   naturalnessScore: number;
@@ -225,6 +235,16 @@ export class AiRepository {
       id: String(attempt._id),
       expectedText: attempt.expectedText,
       transcribedText: attempt.transcribedText,
+      rawTranscript: attempt.rawTranscript ?? attempt.transcribedText,
+      normalizedTranscript: attempt.normalizedTranscript ?? attempt.transcribedText,
+      correctedText: attempt.correctedText,
+      translated: attempt.translated ?? false,
+      detectedLanguage: attempt.detectedLanguage,
+      targetLanguage: attempt.targetLanguage,
+      transcriptionLanguage: attempt.transcriptionLanguage,
+      feedbackPtBr: attempt.feedbackPtBr,
+      wordAnalysis: attempt.wordAnalysis ?? [],
+      preferencesVersion: attempt.preferencesVersion,
       pronunciationScore: attempt.pronunciationScore,
       naturalnessScore: attempt.naturalnessScore,
       connectedSpeechScore: attempt.connectedSpeechScore,
@@ -300,3 +320,4 @@ const mapStats = (stats: any, weeklySpeaking: UserProgressStats["weeklySpeaking"
   mostMissedWords: stats.mostMissedWords ?? [],
   weeklySpeaking,
 });
+

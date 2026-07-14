@@ -11,7 +11,7 @@ class AudioController {
         };
         this.speech = async (request, response) => {
             try {
-                const audio = await this.audioService.createSpeech(request.body);
+                const audio = await this.audioService.createSpeech({ ...request.body, userId: request.auth?.userId });
                 response.setHeader("Content-Type", audio.contentType);
                 response.setHeader("Cache-Control", "no-store");
                 response.setHeader("X-Audio-Cache", audio.cache);
@@ -33,7 +33,7 @@ class AudioController {
         };
         this.alignedSpeech = async (request, response) => {
             try {
-                const audio = await this.audioService.createAlignedSpeech(request.body);
+                const audio = await this.audioService.createAlignedSpeech({ ...request.body, userId: request.auth?.userId });
                 response.setHeader("Cache-Control", "no-store");
                 response.setHeader("X-Audio-Cache", audio.cache);
                 response.setHeader("X-Audio-Cacheable", String(audio.cacheable));

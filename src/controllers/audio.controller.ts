@@ -1,4 +1,4 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { env } from "../config/env";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { AudioProviderError, AudioService } from "../services/audio.service";
@@ -12,7 +12,7 @@ export class AudioController {
 
   speech = async (request: AuthenticatedRequest, response: Response) => {
     try {
-      const audio = await this.audioService.createSpeech(request.body);
+      const audio = await this.audioService.createSpeech({ ...request.body, userId: request.auth?.userId });
       response.setHeader("Content-Type", audio.contentType);
       response.setHeader("Cache-Control", "no-store");
       response.setHeader("X-Audio-Cache", audio.cache);
@@ -35,7 +35,7 @@ export class AudioController {
 
   alignedSpeech = async (request: AuthenticatedRequest, response: Response) => {
     try {
-      const audio = await this.audioService.createAlignedSpeech(request.body);
+      const audio = await this.audioService.createAlignedSpeech({ ...request.body, userId: request.auth?.userId });
       response.setHeader("Cache-Control", "no-store");
       response.setHeader("X-Audio-Cache", audio.cache);
       response.setHeader("X-Audio-Cacheable", String(audio.cacheable));
@@ -62,3 +62,4 @@ export class AudioController {
     }
   };
 }
+

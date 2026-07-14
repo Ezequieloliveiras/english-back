@@ -5,6 +5,7 @@ import {
   comparePhraseToTranscript,
   deriveSpeakingMetrics,
   isSupportedSpeakingAudioMime,
+  SpeakingCoachValidationError,
   validateTranscriptComparison,
 } from "../services/speakingCoachAnalysis.service";
 
@@ -66,7 +67,7 @@ describe("speaking coach deterministic analysis", () => {
         validAudioQuality,
         comparison
       )
-    ).toThrow("A gravação não corresponde");
+    ).toThrow(SpeakingCoachValidationError);
   });
 
   it("rejects filler sounds instead of the English target phrase", () => {
@@ -78,7 +79,7 @@ describe("speaking coach deterministic analysis", () => {
         validAudioQuality,
         comparison
       )
-    ).toThrow("A gravação não corresponde");
+    ).toThrow(SpeakingCoachValidationError);
   });
 
   it("caps scores for low coverage and keeps metrics in 0-10", () => {

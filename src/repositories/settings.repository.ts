@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { UserModel } from "../models/user.model";
 import { UserSettingsModel } from "../models/userSettings.model";
 import { UserGoalRepository } from "./userGoal.repository";
@@ -71,7 +71,7 @@ const mapSettings = (settings: any): UserSettings => ({
   preferredAccent: settings.preferredAccent,
   preferredVoice: settings.preferredVoice ?? "alloy",
   correctionStyle: settings.correctionStyle,
-  interfaceLanguage: settings.interfaceLanguage,
+  interfaceLanguage: settings.interfaceLanguage ?? (settings.languageMode === "full_english" ? "en" : "pt-BR"),
   primaryObjective: settings.primaryObjective,
   goalType: settings.goalType ?? settings.primaryObjective,
   goalDescription: settings.goalDescription ?? "",
@@ -81,63 +81,107 @@ const mapSettings = (settings: any): UserSettings => ({
   updatedAt: settings.updatedAt?.toISOString?.(),
 });
 
-const coerceSettings = (userId: string, input: Partial<UserSettings>): UserSettings => {
+const isInterfaceLanguage = (value: unknown): value is UserSettings["interfaceLanguage"] =>
+  value === "pt-BR" || value === "en";
+
+const resolveInterfaceLanguage = (
+  current: UserSettings,
+  merged: Partial<UserSettings>,
+  rawInput: Partial<UserSettings>
+): UserSettings["interfaceLanguage"] => {
+  if (isInterfaceLanguage(rawInput.interfaceLanguage)) {
+    return rawInput.interfaceLanguage;
+  }
+
+  if (rawInput.languageMode === "full_english") {
+    return "en";
+  }
+
+  if (rawInput.languageMode === "pt_explanation_en_correction") {
+    return "pt-BR";
+  }
+
+  if (isInterfaceLanguage(merged.interfaceLanguage)) {
+    return merged.interfaceLanguage;
+  }
+
+  if (isInterfaceLanguage(current.interfaceLanguage)) {
+    return current.interfaceLanguage;
+  }
+
+  return merged.languageMode === "full_english" ? "en" : "pt-BR";
+};
+
+const coerceSettings = (
+  userId: string,
+  input: Partial<UserSettings>,
+  current: UserSettings = defaultSettings(userId),
+  rawInput: Partial<UserSettings> = input
+): UserSettings => {
   const base = defaultSettings(userId);
+
+  const languageMode =
+    input.languageMode === "full_english" || input.languageMode === "pt_explanation_en_correction"
+      ? input.languageMode
+      : base.languageMode;
+  const supportLanguageMode =
+    input.supportLanguageMode === "full_portuguese_support" ||
+    input.supportLanguageMode === "moderate_support" ||
+    input.supportLanguageMode === "guided_immersion" ||
+    input.supportLanguageMode === "english_only"
+      ? input.supportLanguageMode
+      : base.supportLanguageMode;
+  const preferredAccent =
+    input.preferredAccent === "british" || input.preferredAccent === "neutral" || input.preferredAccent === "american"
+      ? input.preferredAccent
+      : base.preferredAccent;
+  const preferredVoice =
+    input.preferredVoice === "ash" ||
+    input.preferredVoice === "ballad" ||
+    input.preferredVoice === "coral" ||
+    input.preferredVoice === "echo" ||
+    input.preferredVoice === "fable" ||
+    input.preferredVoice === "nova" ||
+    input.preferredVoice === "onyx" ||
+    input.preferredVoice === "sage" ||
+    input.preferredVoice === "shimmer" ||
+    input.preferredVoice === "verse" ||
+    input.preferredVoice === "marin" ||
+    input.preferredVoice === "cedar" ||
+    input.preferredVoice === "alloy"
+      ? input.preferredVoice
+      : base.preferredVoice;
+  const correctionStyle =
+    input.correctionStyle === "direct" || input.correctionStyle === "detailed" || input.correctionStyle === "gentle"
+      ? input.correctionStyle
+      : base.correctionStyle;
+  const primaryObjective =
+    input.primaryObjective === "interview" ||
+    input.primaryObjective === "work" ||
+    input.primaryObjective === "travel" ||
+    input.primaryObjective === "technical_english" ||
+    input.primaryObjective === "conversation"
+      ? input.primaryObjective
+      : base.primaryObjective;
+  const goalType =
+    input.goalType === "interview" ||
+    input.goalType === "work" ||
+    input.goalType === "travel" ||
+    input.goalType === "technical_english" ||
+    input.goalType === "conversation"
+      ? input.goalType
+      : input.primaryObjective ?? base.goalType;
 
   return {
     userId,
-    languageMode:
-      input.languageMode === "full_english" || input.languageMode === "pt_explanation_en_correction"
-        ? input.languageMode
-        : base.languageMode,
-    supportLanguageMode:
-      input.supportLanguageMode === "full_portuguese_support" ||
-      input.supportLanguageMode === "moderate_support" ||
-      input.supportLanguageMode === "guided_immersion" ||
-      input.supportLanguageMode === "english_only"
-        ? input.supportLanguageMode
-        : base.supportLanguageMode,
-    preferredAccent:
-      input.preferredAccent === "british" || input.preferredAccent === "neutral" || input.preferredAccent === "american"
-        ? input.preferredAccent
-        : base.preferredAccent,
-    preferredVoice:
-      input.preferredVoice === "ash" ||
-      input.preferredVoice === "ballad" ||
-      input.preferredVoice === "coral" ||
-      input.preferredVoice === "echo" ||
-      input.preferredVoice === "fable" ||
-      input.preferredVoice === "nova" ||
-      input.preferredVoice === "onyx" ||
-      input.preferredVoice === "sage" ||
-      input.preferredVoice === "shimmer" ||
-      input.preferredVoice === "verse" ||
-      input.preferredVoice === "marin" ||
-      input.preferredVoice === "cedar" ||
-      input.preferredVoice === "alloy"
-        ? input.preferredVoice
-        : base.preferredVoice,
-    correctionStyle:
-      input.correctionStyle === "direct" || input.correctionStyle === "detailed" || input.correctionStyle === "gentle"
-        ? input.correctionStyle
-        : base.correctionStyle,
-    interfaceLanguage: input.languageMode === "full_english" ? "en" : "pt-BR",
-    primaryObjective:
-      input.primaryObjective === "interview" ||
-      input.primaryObjective === "work" ||
-      input.primaryObjective === "travel" ||
-      input.primaryObjective === "technical_english" ||
-      input.primaryObjective === "conversation"
-        ? input.primaryObjective
-        : base.primaryObjective,
-    goalType:
-      input.goalType === "interview" ||
-      input.goalType === "work" ||
-      input.goalType === "travel" ||
-      input.goalType === "technical_english" ||
-      input.goalType === "conversation"
-        ? input.goalType
-        : input.primaryObjective ?? base.goalType,
+    languageMode,
+    supportLanguageMode,
+    preferredAccent,
+    preferredVoice,
+    correctionStyle,
+    interfaceLanguage: resolveInterfaceLanguage(current, { ...input, languageMode }, rawInput),
+    primaryObjective,
+    goalType,
     goalDescription:
       typeof input.goalDescription === "string"
         ? input.goalDescription.trim()
@@ -178,7 +222,7 @@ export class SettingsRepository {
 
   async update(userId: string, input: Partial<UserSettings>) {
     const current = await this.findOrCreate(userId);
-    const next = coerceSettings(userId, { ...current, ...input });
+    const next = coerceSettings(userId, { ...current, ...input }, current, input);
 
     if (!isDatabaseReady()) {
       const updated = { ...defaultSettings(userId), ...current, ...next };

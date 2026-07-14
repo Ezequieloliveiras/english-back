@@ -1,7 +1,8 @@
-import { env } from "../config/env";
+﻿import { env } from "../config/env";
 import OpenAI, { toFile } from "openai";
 import { AudioCacheRepository } from "../repositories/audioCache.repository";
 import { AudioStorageService } from "./audioStorage.service";
+import { LearningPreferencesService } from "./learningPreferences.service";
 import {
   AudioType,
   addDays,
@@ -35,16 +36,17 @@ const providerVoices: Record<SpeechProvider, string[]> = {
 
 const clampSpeed = (speed?: number) => Math.min(1.5, Math.max(0.6, Number(speed ?? 1)));
 
-const buildOpenAiSpeechInstructions = (speed: number) => {
+const buildOpenAiSpeechInstructions = (speed: number, accent = "american") => {
+  const accentInstruction = accent === "british" ? " Use a clear British English accent." : " Use a clear American English accent.";
   if (speed < 0.85) {
-    return "Speak slowly, clearly, and naturally for an English beginner practicing shadowing.";
+    return `Speak slowly, clearly, and naturally for an English beginner practicing shadowing.${accentInstruction}`;
   }
 
   if (speed > 1.15) {
-    return "Speak a little faster than normal while keeping clear pronunciation and natural rhythm.";
+    return `Speak a little faster than normal while keeping clear pronunciation and natural rhythm.${accentInstruction}`;
   }
 
-  return "Speak with natural rhythm, clear pronunciation, and a friendly English coaching tone.";
+  return `Speak with natural rhythm, clear pronunciation, and a friendly English coaching tone.${accentInstruction}`;
 };
 
 const sanitizeProviderMessage = (message: string) =>
@@ -99,7 +101,8 @@ export class AudioService {
 
   constructor(
     private readonly audioCacheRepository?: AudioCacheRepository,
-    private readonly audioStorageService = new AudioStorageService()
+    private readonly audioStorageService = new AudioStorageService(),
+    private readonly learningPreferencesService?: LearningPreferencesService
   ) {}
 
   listProviders() {
@@ -144,15 +147,19 @@ export class AudioService {
     audioType?: AudioType;
     cacheable?: boolean;
     version?: string;
+    userId?: string;
   }) {
+    const preferences = input.userId && this.learningPreferencesService
+      ? await this.learningPreferencesService.getEffectivePreferences(input.userId)
+      : null;
     const provider = input.provider as SpeechProvider;
     const text = normalizeSpeechText(input.text ?? "");
     const speed = clampSpeed(input.speed);
     const model = input.model || "gpt-4o-mini-tts";
-    const language = input.language || "en";
-    const accent = input.accent || "american";
+    const language = preferences?.targetLanguage ?? input.language ?? "en-US";
+    const accent = preferences?.accent ?? (input.accent === "british" ? "british" : "american");
     const audioType = input.audioType || "unknown";
-    const version = input.version || "v1";
+    const version = input.version || `prefs-v${preferences?.version ?? 0}`;
 
     if (!text) {
       throw new Error("Text is required");
@@ -160,7 +167,7 @@ export class AudioService {
 
     const policy = getAudioCachePolicy(audioType);
     const shouldCache = Boolean(policy.cacheable && input.cacheable !== false);
-    const voice = this.resolveVoice(provider, input.voice);
+    const voice = this.resolveVoice(provider, preferences?.voice ?? input.voice);
     const cacheKey = buildAudioCacheKey({
       provider,
       model,
@@ -205,6 +212,7 @@ export class AudioService {
             voice,
             speed,
             model,
+            accent,
           })
         : provider === "google" || provider === "custom"
           ? await this.createConfiguredProviderSpeech({
@@ -271,7 +279,11 @@ export class AudioService {
     audioType?: AudioType;
     cacheable?: boolean;
     version?: string;
+    userId?: string;
   }) {
+    const preferences = input.userId && this.learningPreferencesService
+      ? await this.learningPreferencesService.getEffectivePreferences(input.userId)
+      : null;
     if (!this.client) {
       throw new Error("OPENAI_API_KEY is required for word-level audio alignment");
     }
@@ -290,7 +302,7 @@ export class AudioService {
     const transcription = await this.client.audio.transcriptions.create({
       file: audioFile,
       model: "whisper-1",
-      language: input.language || "en",
+      language: preferences?.transcriptionLanguage ?? input.language ?? "en",
       response_format: "verbose_json",
       timestamp_granularities: ["word"],
     });
@@ -315,7 +327,7 @@ export class AudioService {
     return voice || "default";
   }
 
-  private async createOpenAiSpeech(input: { text: string; voice: string; speed: number; model: string }) {
+  private async createOpenAiSpeech(input: { text: string; voice: string; speed: number; model: string; accent: string }) {
     if (!env.openAiApiKey) {
       throw new Error("OPENAI_API_KEY is required for OpenAI voice");
     }
@@ -330,7 +342,7 @@ export class AudioService {
         model: input.model,
         voice: input.voice,
         input: input.text,
-        instructions: buildOpenAiSpeechInstructions(input.speed),
+        instructions: buildOpenAiSpeechInstructions(input.speed, input.accent),
         response_format: "mp3",
       }),
     });
@@ -403,3 +415,4 @@ export class AudioService {
     };
   }
 }
+

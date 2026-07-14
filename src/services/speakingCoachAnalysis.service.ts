@@ -1,7 +1,8 @@
-import { spawn } from "child_process";
+﻿import { spawn } from "child_process";
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
+import { SpeechAnalysisResult, WordAnalysis } from "../types/speech";
 
 export type SpeakingCoachStatus = "ok" | "no_speech" | "unclear_audio" | "wrong_phrase" | "too_short" | "processing_error";
 
@@ -302,11 +303,11 @@ export const normalizeAndAnalyzeAudio = async (input: {
   mimeType: string;
 }): Promise<{ wavBuffer: Buffer; audioQuality: AudioQualityResult }> => {
   if (input.buffer.length < MIN_AUDIO_BYTES) {
-    throw new SpeakingCoachValidationError("too_short", "A gravação está vazia ou curta demais.", 422);
+    throw new SpeakingCoachValidationError("too_short", "A gravaÃ§Ã£o estÃ¡ vazia ou curta demais.", 422);
   }
 
   if (!isSupportedSpeakingAudioMime(input.mimeType)) {
-    throw new SpeakingCoachValidationError("processing_error", "Formato de áudio não suportado.", 415);
+    throw new SpeakingCoachValidationError("processing_error", "Formato de Ã¡udio nÃ£o suportado.", 415);
   }
 
   const dir = await mkdtemp(path.join(tmpdir(), "english-os-speaking-"));
@@ -320,11 +321,11 @@ export const normalizeAndAnalyzeAudio = async (input: {
     const audioQuality = analyzePcmWav(wavBuffer);
 
     if (audioQuality.durationSeconds > MAX_DURATION_SECONDS) {
-      throw new SpeakingCoachValidationError("processing_error", "A gravação está longa demais para análise.", 400, audioQuality);
+      throw new SpeakingCoachValidationError("processing_error", "A gravaÃ§Ã£o estÃ¡ longa demais para anÃ¡lise.", 400, audioQuality);
     }
 
     if (audioQuality.durationSeconds < MIN_DURATION_SECONDS) {
-      throw new SpeakingCoachValidationError("too_short", "A gravação foi curta demais para avaliar a frase.", 422, audioQuality);
+      throw new SpeakingCoachValidationError("too_short", "A gravaÃ§Ã£o foi curta demais para avaliar a frase.", 422, audioQuality);
     }
 
     if (audioQuality.rms < MIN_RMS || audioQuality.peak < MIN_PEAK) {
@@ -332,7 +333,7 @@ export const normalizeAndAnalyzeAudio = async (input: {
     }
 
     if (audioQuality.speechRatio < MIN_SPEECH_RATIO) {
-      throw new SpeakingCoachValidationError("unclear_audio", "Não foi possível compreender sua voz.", 422, audioQuality);
+      throw new SpeakingCoachValidationError("unclear_audio", "NÃ£o foi possÃ­vel compreender sua voz.", 422, audioQuality);
     }
 
     return { wavBuffer, audioQuality };
@@ -734,7 +735,7 @@ export const validateTranscriptComparison = (
   if (comparison.spokenWords.length < Math.max(2, Math.ceil(comparison.expectedWords.length * 0.25))) {
     throw new SpeakingCoachValidationError(
       "too_short",
-      "A gravação foi curta demais para avaliar a frase.",
+      "A gravaÃ§Ã£o foi curta demais para avaliar a frase.",
       422,
       audioQuality,
       comparison,
@@ -748,11 +749,99 @@ export const validateTranscriptComparison = (
   ) {
     throw new SpeakingCoachValidationError(
       "wrong_phrase",
-      "A gravação não corresponde à frase de treino.",
+      "A gravaÃ§Ã£o nÃ£o corresponde Ã  frase de treino.",
       422,
       audioQuality,
       comparison,
       transcript
     );
   }
+};
+
+const wordAnalysisStatus = (status: WordAlignmentResult["status"]): WordAnalysis["status"] => {
+  if (status === "exact") return "correct";
+  if (status === "substitution") return "mispronounced";
+  return status;
+};
+
+const wordExplanationPtBr = (analysis: WordAnalysis) => {
+  switch (analysis.status) {
+    case "correct":
+      return undefined;
+    case "missing":
+      return `Você deixou de falar "${analysis.expected}". Ouça novamente e tente repetir a frase completa.`;
+    case "extra":
+      return `Foi identificado "${analysis.spoken}" como palavra extra. Tente repetir apenas a frase de treino.`;
+    case "mispronounced":
+    default:
+      return `Você falou "${analysis.spoken}", mas a forma esperada é "${analysis.expected}". Ouça novamente e tente repetir essa parte.`;
+  }
+};
+
+export const buildWordAnalysis = (
+  alignment: WordAlignmentResult[],
+  confidence: number
+): WordAnalysis[] =>
+  alignment.map((item) => {
+    const analysis: WordAnalysis = {
+      spoken: item.spokenWord ?? "",
+      expected: item.expectedWord ?? "",
+      status: wordAnalysisStatus(item.status),
+      start: item.start,
+      end: item.end,
+      confidence,
+    };
+
+    return {
+      ...analysis,
+      explanationPtBr: wordExplanationPtBr(analysis),
+    };
+  });
+
+const buildFallbackFeedbackPtBr = (wordAnalysis: WordAnalysis[], isCorrect: boolean) => {
+  if (isCorrect) {
+    return "Boa tentativa. A fala corresponde à frase esperada.";
+  }
+
+  const issue = wordAnalysis.find((item) => item.status !== "correct");
+  if (!issue) {
+    return "Não foi possível confirmar a frase com segurança. Ouça novamente e tente repetir.";
+  }
+
+  return issue.explanationPtBr ?? "Ouça novamente e tente repetir a frase esperada.";
+};
+
+export const buildSpeechAnalysisResult = (input: {
+  rawTranscript: string;
+  expectedText: string;
+  targetLanguage: string;
+  transcriptionLanguage: string;
+  comparison: PhraseComparisonResult;
+  alignment: WordAlignmentResult[];
+  detectedLanguage?: string;
+  feedbackPtBr?: string;
+  translated?: boolean;
+}): SpeechAnalysisResult => {
+  const confidence = Number(Math.max(0, Math.min(1, (input.comparison.coverage + input.comparison.similarity) / 2)).toFixed(3));
+  const normalizedTranscript = normalizeSpeechWords(input.rawTranscript).join(" ");
+  const isCorrect =
+    input.comparison.missingWords.length === 0 &&
+    input.comparison.extraWords.length === 0 &&
+    input.alignment.every((item) => item.status === "exact");
+  const wordAnalysis = buildWordAnalysis(input.alignment, confidence);
+
+  return {
+    rawTranscript: input.rawTranscript,
+    normalizedTranscript,
+    expectedText: input.expectedText,
+    correctedText: isCorrect ? undefined : input.expectedText,
+    feedbackPtBr: input.feedbackPtBr ?? buildFallbackFeedbackPtBr(wordAnalysis, isCorrect),
+    detectedLanguage: input.detectedLanguage ?? input.transcriptionLanguage,
+    targetLanguage: input.targetLanguage,
+    transcriptionLanguage: input.transcriptionLanguage,
+    translated: input.translated ?? false,
+    isCorrect,
+    confidence,
+    wordAnalysis,
+  };
 };

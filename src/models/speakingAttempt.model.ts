@@ -1,4 +1,4 @@
-import { Schema, model } from "mongoose";
+﻿import { Schema, model } from "mongoose";
 
 const speakingAttemptSchema = new Schema(
   {
@@ -6,6 +6,16 @@ const speakingAttemptSchema = new Schema(
     phraseId: { type: String },
     expectedText: { type: String, required: true },
     transcribedText: { type: String, required: true },
+    rawTranscript: { type: String },
+    normalizedTranscript: { type: String },
+    correctedText: { type: String },
+    translated: { type: Boolean, required: true, default: false },
+    detectedLanguage: { type: String },
+    targetLanguage: { type: String },
+    transcriptionLanguage: { type: String },
+    feedbackPtBr: { type: String },
+    wordAnalysis: { type: [Schema.Types.Mixed], required: true, default: [] },
+    preferencesVersion: { type: Number },
     audioUrl: { type: String },
     pronunciationScore: { type: Number, required: true, default: 0 },
     naturalnessScore: { type: Number, required: true, default: 0 },
@@ -36,3 +46,4 @@ const speakingAttemptSchema = new Schema(
 speakingAttemptSchema.index({ userId: 1, createdAt: -1 });
 
 export const SpeakingAttemptModel = model("SpeakingAttempt", speakingAttemptSchema);
+

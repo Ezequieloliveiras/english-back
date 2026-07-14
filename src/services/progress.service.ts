@@ -6,6 +6,16 @@ type SpeakingAttemptProgressInput = {
   attemptId: string;
   expectedText: string;
   transcribedText: string;
+  rawTranscript?: string;
+  normalizedTranscript?: string;
+  correctedText?: string;
+  translated?: boolean;
+  detectedLanguage?: string;
+  targetLanguage?: string;
+  transcriptionLanguage?: string;
+  feedbackPtBr?: string;
+  wordAnalysis?: unknown[];
+  preferencesVersion?: number;
   wordsSpokenCount: number;
   correctedWords: string[];
   correctionCount: number;

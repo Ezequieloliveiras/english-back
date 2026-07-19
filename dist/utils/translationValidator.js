@@ -59,7 +59,20 @@ const validatePortugueseTranslation = (sourceEnglish, translation) => {
     if (source && source === target) {
         return { valid: false, reason: "same_as_source" };
     }
+    if (source && target.includes(source)) {
+        return { valid: false, reason: "contains_source_english" };
+    }
+    const sourceContentWords = words(sourceEnglish).filter((word) => word.length > 2 && !englishStopWords.has(word));
     const targetWords = words(trimmed).filter((word) => word.length > 2);
+    if (sourceContentWords.length > 0 && targetWords.length > 0) {
+        const copiedSourceWords = sourceContentWords.filter((word) => targetWords.includes(word));
+        const copiedRatio = copiedSourceWords.length / sourceContentWords.length;
+        if ((sourceContentWords.length <= 2 && copiedSourceWords.length > 0) ||
+            copiedSourceWords.length >= 2 ||
+            copiedRatio >= 0.5) {
+            return { valid: false, reason: "contains_source_english" };
+        }
+    }
     if (targetWords.length >= 4) {
         const englishLikeCount = targetWords.filter((word) => englishStopWords.has(word)).length;
         if (englishLikeCount / targetWords.length > 0.55) {

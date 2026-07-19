@@ -119,13 +119,14 @@ exports.app.use((0, cookie_parser_1.default)());
 exports.app.use(express_1.default.json({ limit: "15mb" }));
 exports.app.use((req, res, next) => {
     const start = Date.now();
-    console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
+    const logSeparator = "-".repeat(40);
+    console.log(logSeparator);
     console.log(`[${new Date().toISOString()}]`);
     console.log(`${req.method} ${req.originalUrl}`);
     console.log("Origin:", req.headers.origin ?? "sem origin");
     res.on("finish", () => {
-        console.log(`â†’ ${res.statusCode} (${Date.now() - start}ms)`);
-        console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
+        console.log(`-> ${res.statusCode} (${Date.now() - start}ms)`);
+        console.log(logSeparator);
     });
     next();
 });

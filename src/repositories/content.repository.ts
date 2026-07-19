@@ -192,6 +192,70 @@ const normalizeProfessionText = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const professionalTermTranslations: Record<string, string> = {
+  access: "acesso",
+  "api": "API",
+  audience: "público",
+  blocker: "bloqueio",
+  "brand message": "mensagem da marca",
+  bug: "problema",
+  campaign: "campanha",
+  "content calendar": "calendário de conteúdo",
+  conversion: "conversão",
+  "customer context": "contexto do cliente",
+  deadline: "prazo",
+  "decision maker": "pessoa responsável pela decisão",
+  deployment: "implantação",
+  "edge case": "caso extremo",
+  escalation: "escalonamento",
+  feedback: "retorno",
+  "follow-up": "acompanhamento",
+  layout: "leiaute",
+  lead: "potencial cliente",
+  objection: "objeção",
+  priority: "prioridade",
+  proposal: "proposta",
+  prototype: "protótipo",
+  "pull request": "solicitação de revisão",
+  resolution: "resolução",
+  result: "resultado",
+  "response time": "tempo de resposta",
+  stakeholder: "parte interessada",
+  "staging logs": "logs do ambiente de homologação",
+  "next step": "próximo passo",
+  "user flow": "fluxo do usuário",
+  "visual hierarchy": "hierarquia visual",
+};
+
+const professionalAreaTranslations: Record<string, string> = {
+  "customer support": "suporte ao cliente",
+  design: "design",
+  designer: "design",
+  developer: "desenvolvimento de software",
+  doctor: "medicina",
+  engineer: "engenharia",
+  marketing: "marketing",
+  physician: "medicina",
+  sales: "vendas",
+  "software development": "desenvolvimento de software",
+  support: "suporte ao cliente",
+  teacher: "educação",
+  vendas: "vendas",
+};
+
+const translateProfessionalTerm = (term: string) =>
+  professionalTermTranslations[normalizeProfessionText(term)] ?? term;
+
+const translateProfessionalArea = (area: string) => {
+  const normalized = normalizeProfessionText(area);
+
+  if (professionalAreaTranslations[normalized]) {
+    return professionalAreaTranslations[normalized];
+  }
+
+  return looksPortuguese(area) ? area : "sua área profissional";
+};
+
 const professionalProfile = (user: UserProfile) => {
   const profession = safeText(user.profession, "work");
   const goalContext = buildGoalContext(user.primaryGoal);
@@ -313,7 +377,7 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
         "Qual é o seu foco principal nesta sessão?",
         goal.portugueseGoalSentence,
         "Certo. Qual é uma pequena tarefa que você consegue terminar agora?",
-        `Eu consigo dizer: ${profile.phrases[0]}`,
+        translateGeneratedPhrase(profile.phrases[0], profile.area),
       ],
       questions: [
         { prompt: "What does the student want to practice?", answer: goal.englishPurpose },
@@ -422,6 +486,7 @@ const buildShadowingItem = (item: {
 });
 
 const translateGeneratedPhrase = (phrase: string, area: string) => {
+  const areaPtBr = translateProfessionalArea(area);
   const translations: Record<string, string> = {
     "I can explain the next step in simple English.": "Eu consigo explicar o próximo passo em inglês simples.",
     "The campaign needs a clearer message for this audience.":
@@ -431,9 +496,9 @@ const translateGeneratedPhrase = (phrase: string, area: string) => {
     "I need to understand the customer's main objection.":
       "Eu preciso entender a principal objeção do cliente.",
     "I will send a clear follow-up with the next step.":
-      "Vou enviar um follow-up claro com o próximo passo.",
+      "Vou enviar um acompanhamento claro com o próximo passo.",
     "I need more context before I escalate this ticket.":
-      "Eu preciso de mais contexto antes de escalar esse ticket.",
+      "Eu preciso de mais contexto antes de encaminhar esse chamado.",
     "I will explain the solution clearly to the customer.":
       "Vou explicar a solução com clareza para o cliente.",
     "I can explain the issue and suggest a solution.":
@@ -441,9 +506,9 @@ const translateGeneratedPhrase = (phrase: string, area: string) => {
     "I need to check the API response before I continue.":
       "Eu preciso verificar a resposta da API antes de continuar.",
     "The layout should make the main action clearer.":
-      "O layout deve deixar a ação principal mais clara.",
+      "O leiaute deve deixar a ação principal mais clara.",
     "I will update the prototype after the feedback.":
-      "Vou atualizar o protótipo depois do feedback.",
+      "Vou atualizar o protótipo depois do retorno.",
   };
 
   if (translations[phrase]) {
@@ -451,33 +516,37 @@ const translateGeneratedPhrase = (phrase: string, area: string) => {
   }
 
   if (phrase.startsWith("I need to clarify the priority for this")) {
-    return `Eu preciso esclarecer a prioridade desta tarefa de ${area}.`;
+    return `Eu preciso esclarecer a prioridade desta tarefa de ${areaPtBr}.`;
   }
 
   if (phrase.startsWith("I can explain the result in simple English")) {
-    return `Eu consigo explicar o resultado em inglês simples no contexto de ${area}.`;
+    return `Eu consigo explicar o resultado em inglês simples no contexto de ${areaPtBr}.`;
   }
 
   if (phrase.startsWith("My goal today is to practice")) {
     return "Meu objetivo hoje é praticar esse foco em inglês.";
   }
 
-  return `Frase útil para ${area}.`;
+  return `Frase útil para ${areaPtBr}.`;
 };
 
 const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan): ShadowingItem[] => {
   const goal = buildGoalContext(user.primaryGoal);
   const profile = professionalProfile(user);
   const area = profile.area;
+  const areaPtBr = translateProfessionalArea(area);
   const terms = profile.terms.length ? profile.terms : ["priority", "deadline", "next step"];
   const primaryTerm = terms[0] ?? "priority";
   const secondaryTerm = terms[1] ?? "deadline";
   const tertiaryTerm = terms[2] ?? "next step";
+  const primaryTermPtBr = translateProfessionalTerm(primaryTerm);
+  const secondaryTermPtBr = translateProfessionalTerm(secondaryTerm);
+  const tertiaryTermPtBr = translateProfessionalTerm(tertiaryTerm);
   const specs = [
     {
       text: profile.phrases[0],
       translation: translateGeneratedPhrase(profile.phrases[0], area),
-      explanation: `Use em atualizações de ${area}.`,
+      explanation: `Use em atualizações de ${areaPtBr}.`,
       tip: "Destaque o termo profissional principal e mantenha o final claro.",
     },
     {
@@ -488,25 +557,25 @@ const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan): Shad
     },
     {
       text: `I need to clarify the ${primaryTerm} before I continue.`,
-      translation: `Eu preciso esclarecer ${primaryTerm} antes de continuar.`,
+      translation: `Eu preciso esclarecer ${primaryTermPtBr} antes de continuar.`,
       explanation: "Use quando falta uma informação importante para seguir.",
       tip: "Conecte 'need to' naturalmente, próximo de 'needta'.",
     },
     {
       text: `The ${secondaryTerm} is important for the next step.`,
-      translation: `${secondaryTerm} é importante para o próximo passo.`,
+      translation: `${secondaryTermPtBr} é importante para o próximo passo.`,
       explanation: "Use para explicar por que uma informação afeta a próxima ação.",
       tip: "Dê ênfase ao termo principal e finalize 'next step' com clareza.",
     },
     {
       text: `I will update the team after I check the ${tertiaryTerm}.`,
-      translation: `Vou atualizar a equipe depois de verificar ${tertiaryTerm}.`,
+      translation: `Vou atualizar a equipe depois de verificar ${tertiaryTermPtBr}.`,
       explanation: "Use quando você promete retorno depois de confirmar uma informação.",
       tip: "Mantenha 'will update' conectado e claro.",
     },
     {
       text: `Can you confirm the ${primaryTerm} for this ${area} task?`,
-      translation: `Você pode confirmar ${primaryTerm} para esta tarefa de ${area}?`,
+      translation: `Você pode confirmar ${primaryTermPtBr} para esta tarefa de ${areaPtBr}?`,
       explanation: "Use para pedir confirmação de forma direta e educada.",
       tip: "Reduza 'can you' naturalmente e destaque a informação pedida.",
     },
@@ -518,7 +587,7 @@ const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan): Shad
     },
     {
       text: `I am working on the ${tertiaryTerm} now.`,
-      translation: `Estou trabalhando em ${tertiaryTerm} agora.`,
+      translation: `Estou trabalhando em ${tertiaryTermPtBr} agora.`,
       explanation: "Use para dar uma atualização curta sobre o que você está fazendo.",
       tip: "Conecte 'working on' de forma fluida.",
     },
@@ -628,20 +697,24 @@ const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan): Shado
 const buildPlanVocabulary = (user: UserProfile, dailyPlan: DailyPlan): VocabularyItem[] => {
   const rotation = getPlanRotation(dailyPlan);
   const profile = professionalProfile(user);
+  const primaryTerm = profile.terms[0] ?? "priority";
+  const secondaryTerm = profile.terms[1] ?? "deadline";
+  const primaryTermPtBr = translateProfessionalTerm(primaryTerm);
+  const secondaryTermPtBr = translateProfessionalTerm(secondaryTerm);
   const nextReview = new Date();
   nextReview.setDate(nextReview.getDate() + 2);
 
   return [
     {
       id: `plan-vocab-${dailyPlan.date}-${rotation}-1`,
-      phrase: profile.enabled ? `I need to clarify the ${profile.terms[0]} first.` : "I need to confirm one detail first.",
-      translation: profile.enabled ? `Preciso esclarecer ${profile.terms[0]} primeiro.` : "Preciso confirmar um detalhe primeiro.",
+      phrase: profile.enabled ? `I need to clarify the ${primaryTerm} first.` : "I need to confirm one detail first.",
+      translation: profile.enabled ? `Preciso esclarecer ${primaryTermPtBr} primeiro.` : "Preciso confirmar um detalhe primeiro.",
       level: user.currentLevel,
       category: profile.enabled ? `${profile.area} focus` : "Current plan",
       sentences: [
-        { text: profile.phrases[0], translation: `Frase contextual de ${profile.area}.` },
-        { text: `I need to confirm the ${profile.terms[0]}.`, translation: `Preciso confirmar ${profile.terms[0]}.` },
-        { text: `The ${profile.terms[1]} is important for the next step.`, translation: `${profile.terms[1]} é importante para o próximo passo.` },
+        { text: profile.phrases[0], translation: translateGeneratedPhrase(profile.phrases[0], profile.area) },
+        { text: `I need to confirm the ${primaryTerm}.`, translation: `Preciso confirmar ${primaryTermPtBr}.` },
+        { text: `The ${secondaryTerm} is important for the next step.`, translation: `${secondaryTermPtBr} é importante para o próximo passo.` },
       ],
       confidence: 50,
       nextReviewAt: nextReview.toISOString(),

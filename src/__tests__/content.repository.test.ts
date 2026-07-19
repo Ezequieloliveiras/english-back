@@ -92,7 +92,7 @@ describe("ContentRepository.personalizeForPlan", () => {
     );
 
     expect(generatedShadowing?.text).toBe("The layout should make the main action clearer.");
-    expect(generatedShadowing?.translation).toBe("O layout deve deixar a ação principal mais clara.");
+    expect(generatedShadowing?.translation).toBe("O leiaute deve deixar a ação principal mais clara.");
     expect(generatedShadowing?.explanation).toBe("Use em atualizações de design.");
     expect(generatedShadowing?.pronunciationTip).toBe(
       "Destaque o termo profissional principal e mantenha o final claro."
@@ -131,5 +131,36 @@ describe("ContentRepository.personalizeForPlan", () => {
 
     expect(repeatedRecently).toHaveLength(0);
     expect(nextPlan.shadowingItems.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("uses real Portuguese translations in generated listening and vocabulary content", () => {
+    const repository = new ContentRepository();
+    const content = {
+      vocabulary: [],
+      listeningLessons: [],
+      shadowingItems: [],
+      conversationModes: [],
+      developerModes: [],
+      thinkInEnglishPrompts: [],
+    };
+    const profile = buildProfile("Falar melhor no trabalho", {
+      profession: "Developer",
+      professionalFocusMode: "profession",
+      professionValidationStatus: "verified",
+    });
+
+    const result = repository.personalizeForPlan(content, profile, firstRotationDailyPlan);
+    const listeningTranslations = result.listeningLessons[0].comprehension?.map((item) => item.translationPtBr) ?? [];
+    const allVocabularyTranslations = result.vocabulary.flatMap((item) => [
+      item.translation,
+      ...(item.sentences ?? []).map((sentence) => sentence.translation),
+    ]);
+
+    expect(listeningTranslations).toContain("Eu consigo explicar o problema e sugerir uma solução.");
+    expect([...listeningTranslations, ...allVocabularyTranslations].join(" ")).not.toMatch(
+      /Eu consigo dizer|É assim que se diz|I can explain the issue and suggest a solution|Preciso esclarecer bug|Preciso confirmar bug/i
+    );
+    expect(allVocabularyTranslations).toContain("Preciso esclarecer problema primeiro.");
+    expect(allVocabularyTranslations).toContain("Preciso confirmar problema.");
   });
 });

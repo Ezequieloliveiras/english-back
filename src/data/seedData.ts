@@ -214,15 +214,15 @@ const listeningLessons: ListeningLesson[] = [
       },
       {
         sourceText: "Yes, I need access to the staging logs.",
-        translation: "Sim, preciso de acesso aos logs de staging.",
+        translation: "Sim, preciso de acesso aos logs do ambiente de homologação.",
         chunks: [
           { text: "I need access", translation: "preciso de acesso" },
-          { text: "to the staging logs", translation: "aos logs de staging" },
+          { text: "to the staging logs", translation: "aos logs do ambiente de homologação" },
         ],
         context: "Use quando você precisa explicar um bloqueio técnico.",
         importantWords: [
           { text: "access", translation: "acesso" },
-          { text: "staging logs", translation: "logs do ambiente de staging" },
+          { text: "staging logs", translation: "logs do ambiente de homologação" },
         ],
         pronunciationTip: "'need access' pode soar conectado, com o /d/ ligando ao som de vogal.",
         additionalExample: "I need access to the admin panel.",

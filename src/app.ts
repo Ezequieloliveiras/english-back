@@ -150,15 +150,16 @@ app.use(express.json({ limit: "15mb" }));
 
 app.use((req, res, next) => {
   const start = Date.now();
+  const logSeparator = "-".repeat(40);
 
-  console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
+  console.log(logSeparator);
   console.log(`[${new Date().toISOString()}]`);
   console.log(`${req.method} ${req.originalUrl}`);
   console.log("Origin:", req.headers.origin ?? "sem origin");
 
   res.on("finish", () => {
-    console.log(`â†’ ${res.statusCode} (${Date.now() - start}ms)`);
-    console.log("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
+    console.log(`-> ${res.statusCode} (${Date.now() - start}ms)`);
+    console.log(logSeparator);
   });
 
   next();

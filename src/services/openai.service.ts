@@ -174,6 +174,9 @@ Corrija somente erros importantes.
 NÃ£o interrompa a fluÃªncia por pequenos erros.
 Use inglÃªs simples, nÃ­vel A1/A2, nas frases de treino e nas respostas que o aluno deve praticar.
 Quando o usuÃ¡rio estiver com suporte em portuguÃªs, explique instruÃ§Ãµes, feedback e raciocÃ­nio pedagÃ³gico em portuguÃªs brasileiro.
+Quando interfaceLanguage for "pt-BR", qualquer campo chamado translation, translationPt ou translationPtBr deve ser uma traducao real, completa e natural em portugues brasileiro.
+Nunca preencha traducao com a frase original em ingles precedida por texto em portugues, como "Eu consigo dizer:" ou "E assim que se diz".
+Quando interfaceLanguage for "pt-BR", explicacoes, feedback e dicas gramaticais devem ficar em portugues brasileiro; use ingles apenas em frases de treino, correcoes ou exemplos citados.
 Nunca dÃª aulas longas de gramÃ¡tica.
 FaÃ§a perguntas curtas para manter a conversa.
 Use frases naturais do dia a dia.
@@ -523,8 +526,10 @@ Return this JSON shape:
       instructions: `
 ${languageInstruction(settings)}
 Crie vocabulÃ¡rio sempre com frases completas, nunca palavras isoladas.
+Se interfaceLanguage for "pt-BR", cada translation deve ser 100% portugues brasileiro, sem repetir a phrase em ingles e sem misturar idiomas.
+Para vocabulario de uma palavra, translation deve ser somente o significado em portugues, por exemplo "Medico.", "Problema.", "Sugerir.".
 Return this JSON shape:
-{"topic":"topic","level":"A1","examples":[{"phrase":"English phrase","translation":"short translation when Portuguese support is enabled, otherwise English meaning","category":"category"}]}
+{"topic":"topic","level":"A1","examples":[{"phrase":"English phrase","translation":"complete Brazilian Portuguese translation when Portuguese support is enabled, otherwise English meaning","category":"category"}]}
 `,
       userContent: JSON.stringify(input),
     });
@@ -650,6 +655,7 @@ For Brazilian Portuguese mode, these pedagogical fields must be in Brazilian Por
 title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence and patterns.exercise.
 Keep only literal quoted English phrases in English, such as "want to", "wanna" and "I wanna talk about my routine.".
 In Brazilian Portuguese mode, do not write phrases like "You said", "Good rhythm", "Practice..." outside quoted examples; write them in Portuguese, like "VocÃª disse...", "Bom ritmo...", "Pratique...".
+In Brazilian Portuguese mode, do not write explanations such as "E assim que se diz doctor" as if they were translations. If teaching vocabulary, explain in Portuguese, for example: Em ingles, "doctor" significa "medico".
 Return valid JSON exactly in this format:
 {
   "feedback": [

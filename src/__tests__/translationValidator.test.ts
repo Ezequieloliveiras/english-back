@@ -23,6 +23,19 @@ describe("translation validator", () => {
     );
   });
 
+  test("rejects Portuguese prefixes followed by copied English source text", () => {
+    expect(
+      validatePortugueseTranslation(
+        "I can explain the issue and suggest a solution.",
+        "Eu consigo dizer: I can explain the issue and suggest a solution."
+      )
+    ).toEqual(expect.objectContaining({ valid: false, reason: "contains_source_english" }));
+
+    expect(validatePortugueseTranslation("doctor", "É assim que se diz doctor.")).toEqual(
+      expect.objectContaining({ valid: false, reason: "contains_source_english" })
+    );
+  });
+
   test("exposes a typed error for invalid translations", () => {
     const result = validatePortugueseTranslation("I need more time.", "You need to have this please.");
 

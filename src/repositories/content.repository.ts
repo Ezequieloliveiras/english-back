@@ -6,6 +6,7 @@ import { VocabularyItemModel } from "../models/vocabularyItem.model";
 import {
   ConversationMode,
   DailyPlan,
+  EnglishLevel,
   ListeningLesson,
   ShadowingItem,
   StudyBlockType,
@@ -102,6 +103,55 @@ const stableContentId = (prefix: string, text: string) => {
 
 const numericDateSeed = (date: string) =>
   date.split("-").reduce((sum, part) => sum + Number(part), 0);
+
+const levelOrder: EnglishLevel[] = ["A1", "A2", "B1", "B2", "C1"];
+
+const normalizeLevel = (level: string): EnglishLevel => {
+  const value = level.toUpperCase();
+
+  return levelOrder.includes(value as EnglishLevel) ? (value as EnglishLevel) : "A1";
+};
+
+const levelRank = (level: EnglishLevel) => Math.max(0, levelOrder.indexOf(level));
+
+const levelDistance = (target: EnglishLevel, candidate: EnglishLevel) =>
+  Math.abs(levelRank(target) - levelRank(candidate));
+
+const allowedReviewLevels = (level: EnglishLevel) => {
+  const rank = levelRank(level);
+
+  if (rank <= 0) {
+    return new Set<EnglishLevel>(["A1"]);
+  }
+
+  return new Set<EnglishLevel>(levelOrder.slice(Math.max(0, rank - 1), rank + 1));
+};
+
+const learningStageCopy: Record<EnglishLevel, { focus: string; label: string }> = {
+  A1: {
+    label: "A1 foundation",
+    focus: "today's core: short present-tense sentences, useful questions, and clear survival replies",
+  },
+  A2: {
+    label: "A2 bridge",
+    focus: "today's upgrade: past actions, future plans, polite requests, and short reasons with because",
+  },
+  B1: {
+    label: "B1 expansion",
+    focus: "today's upgrade: reasons, tradeoffs, conditionals, and follow-up questions in realistic conversations",
+  },
+  B2: {
+    label: "B2 precision",
+    focus: "today's upgrade: nuance, prioritization, disagreement, and clearer explanations under pressure",
+  },
+  C1: {
+    label: "C1 polish",
+    focus: "today's upgrade: concise argumentation, hedging, synthesis, and natural professional tone",
+  },
+};
+
+const dailyProgressionSeed = (dailyPlan: DailyPlan, user: UserProfile) =>
+  numericDateSeed(dailyPlan.date) + getPlanRotation(dailyPlan) + levelRank(normalizeLevel(user.currentLevel));
 
 const normalizeGoalText = (value: string) =>
   value
@@ -359,8 +409,133 @@ const professionalProfile = (user: UserProfile) => {
   };
 };
 
+const buildLevelProgressionScenarios = (user: UserProfile) => {
+  const level = normalizeLevel(user.currentLevel);
+  const stage = learningStageCopy[level];
+  const profile = professionalProfile(user);
+  const goal = buildGoalContext(user.primaryGoal);
+  const areaPtBr = translateProfessionalArea(profile.area);
+  const primaryTerm = profile.terms[0] ?? "priority";
+  const secondaryTerm = profile.terms[1] ?? "deadline";
+  const primaryTermPtBr = translateProfessionalTerm(primaryTerm);
+  const secondaryTermPtBr = translateProfessionalTerm(secondaryTerm);
+  const scenarios: Record<EnglishLevel, PlanScenario[]> = {
+    A1: [
+      {
+        title: "Clear First Answers",
+        situation: `A short practice cycle for ${stage.label}: ${stage.focus}.`,
+        dialogue: [
+          "Coach: What do you need today?",
+          `Student: ${goal.englishGoalSentence}`,
+          "Coach: Can you say one useful sentence?",
+          `Student: ${profile.phrases[0]}`,
+        ],
+        translations: [
+          "Do que você precisa hoje?",
+          goal.portugueseGoalSentence,
+          "Você consegue dizer uma frase útil?",
+          translateGeneratedPhrase(profile.phrases[0], profile.area),
+        ],
+        questions: [
+          { prompt: "What does the student need?", answer: goal.englishPurpose },
+          { prompt: "What sentence does the student practice?", answer: profile.phrases[0] },
+        ],
+      },
+    ],
+    A2: [
+      {
+        title: "Yesterday and Next Step",
+        situation: `A practical A2 bridge using old phrases plus one new time frame in ${areaPtBr}.`,
+        dialogue: [
+          "Coach: What did you practice before?",
+          "Student: I practiced short updates, and today I am going to ask better questions.",
+          "Coach: What question will help you now?",
+          `Student: Could you confirm the ${primaryTerm} before I continue?`,
+        ],
+        translations: [
+          "O que você praticou antes?",
+          "Eu pratiquei atualizações curtas, e hoje vou fazer perguntas melhores.",
+          "Qual pergunta vai te ajudar agora?",
+          `Você poderia confirmar ${primaryTermPtBr} antes de eu continuar?`,
+        ],
+        questions: [
+          { prompt: "What did the student practice before?", answer: "Short updates." },
+          { prompt: "What will the student ask about?", answer: primaryTerm },
+        ],
+      },
+    ],
+    B1: [
+      {
+        title: "Reason and Tradeoff",
+        situation: `A B1 conversation that mixes review language with a new reason and tradeoff in ${areaPtBr}.`,
+        dialogue: [
+          "Manager: What is the main tradeoff?",
+          `Student: If the ${primaryTerm} changes, we should adjust the next step.`,
+          "Manager: Why is that important?",
+          `Student: Because the ${secondaryTerm} affects the expected result.`,
+        ],
+        translations: [
+          "Qual é o principal tradeoff?",
+          `Se ${primaryTermPtBr} mudar, devemos ajustar o próximo passo.`,
+          "Por que isso é importante?",
+          `Porque ${secondaryTermPtBr} afeta o resultado esperado.`,
+        ],
+        questions: [
+          { prompt: "What should change if the priority changes?", answer: "The next step." },
+          { prompt: "What affects the expected result?", answer: secondaryTerm },
+        ],
+      },
+    ],
+    B2: [
+      {
+        title: "Priority and Constraint",
+        situation: `A B2 practice cycle for nuance, prioritization, and constraints in ${areaPtBr}.`,
+        dialogue: [
+          "Lead: How would you prioritize this?",
+          `Student: I would prioritize the ${primaryTerm}, unless the ${secondaryTerm} becomes urgent.`,
+          "Lead: What would you communicate to the team?",
+          "Student: I would explain the constraint and propose a smaller first step.",
+        ],
+        translations: [
+          "Como você priorizaria isso?",
+          `Eu priorizaria ${primaryTermPtBr}, a menos que ${secondaryTermPtBr} se torne urgente.`,
+          "O que você comunicaria para a equipe?",
+          "Eu explicaria a restrição e proporia um primeiro passo menor.",
+        ],
+        questions: [
+          { prompt: "What would the student prioritize?", answer: primaryTerm },
+          { prompt: "What would the student propose?", answer: "A smaller first step." },
+        ],
+      },
+    ],
+    C1: [
+      {
+        title: "Concise Recommendation",
+        situation: `A C1 practice cycle for synthesis, hedging, and concise recommendations in ${areaPtBr}.`,
+        dialogue: [
+          "Director: What is your recommendation?",
+          `Student: Given the ${primaryTerm}, I would recommend a staged approach.`,
+          "Director: What risk should we watch?",
+          `Student: The main risk is overcommitting before the ${secondaryTerm} is clear.`,
+        ],
+        translations: [
+          "Qual é a sua recomendação?",
+          `Considerando ${primaryTermPtBr}, eu recomendaria uma abordagem em etapas.`,
+          "Qual risco devemos observar?",
+          `O principal risco é assumir compromissos demais antes que ${secondaryTermPtBr} esteja claro.`,
+        ],
+        questions: [
+          { prompt: "What approach does the student recommend?", answer: "A staged approach." },
+          { prompt: "What is the main risk?", answer: "Overcommitting too early." },
+        ],
+      },
+    ],
+  };
+
+  return scenarios[level];
+};
+
 const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
-  const rotation = getPlanRotation(dailyPlan);
   const goal = buildGoalContext(user.primaryGoal);
   const profile = professionalProfile(user);
   const scenarios: PlanScenario[] = [
@@ -446,9 +621,10 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
         { prompt: "What does the student confirm?", answer: "The priority and the deadline." },
       ],
     },
+    ...buildLevelProgressionScenarios(user),
   ];
 
-  return scenarios[rotation % scenarios.length];
+  return scenarios[dailyProgressionSeed(dailyPlan, user) % scenarios.length];
 };
 
 const chunkByPhrase = (text: string, translation: string) => {
@@ -616,8 +792,94 @@ const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan): Shad
       tip: "Dê uma pausa leve antes de 'during review'.",
     },
   ];
+  const level = normalizeLevel(user.currentLevel);
+  const levelSpecs: Record<EnglishLevel, typeof specs> = {
+    A1: [
+      {
+        text: "I can say this in a simple way.",
+        translation: "Eu consigo dizer isso de um jeito simples.",
+        explanation: "Use para ganhar confiança com uma frase curta e reaproveitável.",
+        tip: "Fale 'simple way' como uma unidade curta.",
+      },
+      {
+        text: `Can you help me with the ${primaryTerm}?`,
+        translation: `Você pode me ajudar com ${primaryTermPtBr}?`,
+        explanation: "Use para pedir ajuda de forma direta.",
+        tip: "Reduza 'can you' naturalmente e termine com clareza.",
+      },
+    ],
+    A2: [
+      {
+        text: "I practiced this before, and now I can use it faster.",
+        translation: "Eu pratiquei isso antes, e agora consigo usar mais rápido.",
+        explanation: "Use para conectar revisão antiga com fluência nova.",
+        tip: "Separe levemente 'before' e conecte 'now I can'.",
+      },
+      {
+        text: `I am going to check the ${secondaryTerm} after this meeting.`,
+        translation: `Vou verificar ${secondaryTermPtBr} depois desta reunião.`,
+        explanation: "Use para praticar plano futuro com 'going to'.",
+        tip: "Fale 'going to' de forma conectada, sem acelerar o resto.",
+      },
+      {
+        text: `Could you confirm the ${primaryTerm} before I continue?`,
+        translation: `Você poderia confirmar ${primaryTermPtBr} antes de eu continuar?`,
+        explanation: "Use para fazer um pedido educado em uma situação real.",
+        tip: "Destaque 'confirm' e mantenha a pergunta leve.",
+      },
+    ],
+    B1: [
+      {
+        text: `If the ${primaryTerm} changes, we should adjust the next step.`,
+        translation: `Se ${primaryTermPtBr} mudar, devemos ajustar o próximo passo.`,
+        explanation: "Use para praticar condição e consequência em uma fala profissional.",
+        tip: "Faça uma pausa curta depois da condição com 'if'.",
+      },
+      {
+        text: `The main tradeoff is the ${primaryTerm} versus the ${secondaryTerm}.`,
+        translation: `O principal tradeoff é ${primaryTermPtBr} versus ${secondaryTermPtBr}.`,
+        explanation: "Use para comparar duas forças importantes sem falar demais.",
+        tip: "Dê ênfase em 'main tradeoff' e mantenha 'versus' claro.",
+      },
+      {
+        text: "I can explain the reason behind this decision.",
+        translation: "Eu consigo explicar o motivo por trás desta decisão.",
+        explanation: "Use para subir de frases soltas para explicações completas.",
+        tip: "Conecte 'reason behind' como um bloco natural.",
+      },
+    ],
+    B2: [
+      {
+        text: `I would prioritize the ${primaryTerm}, unless the ${secondaryTerm} becomes urgent.`,
+        translation: `Eu priorizaria ${primaryTermPtBr}, a menos que ${secondaryTermPtBr} se torne urgente.`,
+        explanation: "Use para praticar nuance, exceção e priorização.",
+        tip: "Faça uma pausa clara antes de 'unless'.",
+      },
+      {
+        text: "I would explain the constraint and propose a smaller first step.",
+        translation: "Eu explicaria a restrição e proporia um primeiro passo menor.",
+        explanation: "Use para soar claro quando há limitação e decisão.",
+        tip: "Mantenha 'smaller first step' firme no final.",
+      },
+    ],
+    C1: [
+      {
+        text: `Given the ${primaryTerm}, I would recommend a staged approach.`,
+        translation: `Considerando ${primaryTermPtBr}, eu recomendaria uma abordagem em etapas.`,
+        explanation: "Use para dar recomendação concisa com tom profissional.",
+        tip: "Dê ritmo a 'staged approach' sem alongar demais.",
+      },
+      {
+        text: `The main risk is overcommitting before the ${secondaryTerm} is clear.`,
+        translation: `O principal risco é assumir compromissos demais antes que ${secondaryTermPtBr} esteja claro.`,
+        explanation: "Use para resumir risco com precisão.",
+        tip: "Reduza 'overcommitting' em sílabas claras e termine com calma.",
+      },
+    ],
+  };
+  const mixedSpecs = rotateItems([...specs, ...levelSpecs[level]], dailyProgressionSeed(dailyPlan, user));
 
-  return specs.map((spec) =>
+  return mixedSpecs.map((spec) =>
     buildShadowingItem({
       id: stableContentId("shadowing", spec.text),
       text: spec.text,
@@ -664,15 +926,17 @@ const selectShadowingItems = (
 const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan): ListeningLesson => {
   const rotation = getPlanRotation(dailyPlan);
   const scenario = buildPlanScenario(user, dailyPlan);
+  const level = normalizeLevel(user.currentLevel);
+  const scenarioKey = stableContentId("listening", `${dailyPlan.date}-${level}-${scenario.title}`);
 
   return {
-    id: `plan-listening-${dailyPlan.date}-${rotation}`,
+    id: scenarioKey,
     title: scenario.title,
-    level: user.currentLevel,
+    level,
     situationDescription: scenario.situation,
     dialogue: scenario.dialogue,
     questions: scenario.questions.map((question, index) => ({
-      id: `plan-question-${dailyPlan.date}-${rotation}-${index + 1}`,
+      id: `plan-question-${dailyPlan.date}-${level}-${rotation}-${index + 1}`,
       ...question,
     })),
     comprehension: scenario.dialogue.map((line, index) => {
@@ -696,63 +960,180 @@ const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan): Shado
 
 const buildPlanVocabulary = (user: UserProfile, dailyPlan: DailyPlan): VocabularyItem[] => {
   const rotation = getPlanRotation(dailyPlan);
+  const level = normalizeLevel(user.currentLevel);
   const profile = professionalProfile(user);
   const primaryTerm = profile.terms[0] ?? "priority";
   const secondaryTerm = profile.terms[1] ?? "deadline";
   const primaryTermPtBr = translateProfessionalTerm(primaryTerm);
   const secondaryTermPtBr = translateProfessionalTerm(secondaryTerm);
   const nextReview = new Date();
-  nextReview.setDate(nextReview.getDate() + 2);
+  nextReview.setDate(nextReview.getDate() + Math.max(1, 3 - Math.min(2, levelRank(level))));
+  const makeItem = (
+    idPart: string,
+    phrase: string,
+    translation: string,
+    category: string,
+    sentences: VocabularyItem["sentences"]
+  ): VocabularyItem => ({
+    id: `plan-vocab-${dailyPlan.date}-${rotation}-${idPart}`,
+    phrase,
+    translation,
+    level,
+    category,
+    sentences,
+    confidence: 50,
+    nextReviewAt: nextReview.toISOString(),
+    hits: 0,
+    misses: 0,
+    source: "plan_generated",
+    timesPracticed: 0,
+    timesCorrect: 0,
+    timesWrong: 0,
+  });
+  const progressionItems: Record<EnglishLevel, VocabularyItem[]> = {
+    A1: [
+      makeItem("a1-help", `Can you help me with the ${primaryTerm}?`, `Você pode me ajudar com ${primaryTermPtBr}?`, "A1 useful question", [
+        { text: `Can you help me with the ${primaryTerm}?`, translation: `Você pode me ajudar com ${primaryTermPtBr}?` },
+        { text: "I need help with this part.", translation: "Preciso de ajuda com esta parte." },
+        { text: "I can try again now.", translation: "Eu posso tentar de novo agora." },
+      ]),
+    ],
+    A2: [
+      makeItem(
+        "a2-before-now",
+        "I practiced this before, and now I can use it faster.",
+        "Eu pratiquei isso antes, e agora consigo usar mais rápido.",
+        "A2 past plus now",
+        [
+          { text: "I practiced this before.", translation: "Eu pratiquei isso antes." },
+          { text: "Now I can use it faster.", translation: "Agora consigo usar isso mais rápido." },
+          { text: `I am going to check the ${secondaryTerm}.`, translation: `Vou verificar ${secondaryTermPtBr}.` },
+        ]
+      ),
+      makeItem(
+        "a2-polite-confirm",
+        `Could you confirm the ${primaryTerm} before I continue?`,
+        `Você poderia confirmar ${primaryTermPtBr} antes de eu continuar?`,
+        "A2 polite request",
+        [
+          { text: `Could you confirm the ${primaryTerm}?`, translation: `Você poderia confirmar ${primaryTermPtBr}?` },
+          { text: "I need to confirm one detail first.", translation: "Preciso confirmar um detalhe primeiro." },
+          { text: "I am going to continue after that.", translation: "Vou continuar depois disso." },
+        ]
+      ),
+    ],
+    B1: [
+      makeItem(
+        "b1-if-adjust",
+        `If the ${primaryTerm} changes, we should adjust the next step.`,
+        `Se ${primaryTermPtBr} mudar, devemos ajustar o próximo passo.`,
+        "B1 condition and result",
+        [
+          { text: `If the ${primaryTerm} changes, we should adjust the next step.`, translation: `Se ${primaryTermPtBr} mudar, devemos ajustar o próximo passo.` },
+          { text: `Because the ${secondaryTerm} affects the expected result.`, translation: `Porque ${secondaryTermPtBr} afeta o resultado esperado.` },
+          { text: "What is the main tradeoff?", translation: "Qual é o principal tradeoff?" },
+        ]
+      ),
+      makeItem(
+        "b1-reason",
+        "I can explain the reason behind this decision.",
+        "Eu consigo explicar o motivo por trás desta decisão.",
+        "B1 reasons",
+        [
+          { text: "I can explain the reason behind this decision.", translation: "Eu consigo explicar o motivo por trás desta decisão." },
+          { text: "The main tradeoff is speed versus quality.", translation: "O principal tradeoff é velocidade versus qualidade." },
+          { text: "This affects the next step.", translation: "Isso afeta o próximo passo." },
+        ]
+      ),
+    ],
+    B2: [
+      makeItem(
+        "b2-unless",
+        `I would prioritize the ${primaryTerm}, unless the ${secondaryTerm} becomes urgent.`,
+        `Eu priorizaria ${primaryTermPtBr}, a menos que ${secondaryTermPtBr} se torne urgente.`,
+        "B2 nuance",
+        [
+          { text: `I would prioritize the ${primaryTerm}.`, translation: `Eu priorizaria ${primaryTermPtBr}.` },
+          { text: `Unless the ${secondaryTerm} becomes urgent.`, translation: `A menos que ${secondaryTermPtBr} se torne urgente.` },
+          { text: "I would propose a smaller first step.", translation: "Eu proporia um primeiro passo menor." },
+        ]
+      ),
+    ],
+    C1: [
+      makeItem(
+        "c1-recommend",
+        `Given the ${primaryTerm}, I would recommend a staged approach.`,
+        `Considerando ${primaryTermPtBr}, eu recomendaria uma abordagem em etapas.`,
+        "C1 recommendation",
+        [
+          { text: `Given the ${primaryTerm}, I would recommend a staged approach.`, translation: `Considerando ${primaryTermPtBr}, eu recomendaria uma abordagem em etapas.` },
+          { text: `The main risk is overcommitting before the ${secondaryTerm} is clear.`, translation: `O principal risco é assumir compromissos demais antes que ${secondaryTermPtBr} esteja claro.` },
+          { text: "This is a concise recommendation.", translation: "Esta é uma recomendação concisa." },
+        ]
+      ),
+    ],
+  };
 
-  return [
-    {
-      id: `plan-vocab-${dailyPlan.date}-${rotation}-1`,
-      phrase: profile.enabled ? `I need to clarify the ${primaryTerm} first.` : "I need to confirm one detail first.",
-      translation: profile.enabled ? `Preciso esclarecer ${primaryTermPtBr} primeiro.` : "Preciso confirmar um detalhe primeiro.",
-      level: user.currentLevel,
-      category: profile.enabled ? `${profile.area} focus` : "Current plan",
-      sentences: [
-        { text: profile.phrases[0], translation: translateGeneratedPhrase(profile.phrases[0], profile.area) },
-        { text: `I need to confirm the ${primaryTerm}.`, translation: `Preciso confirmar ${primaryTermPtBr}.` },
-        { text: `The ${secondaryTerm} is important for the next step.`, translation: `${secondaryTermPtBr} é importante para o próximo passo.` },
-      ],
-      confidence: 50,
-      nextReviewAt: nextReview.toISOString(),
-      hits: 0,
-      misses: 0,
-      source: "plan_generated",
-      timesPracticed: 0,
-      timesCorrect: 0,
-      timesWrong: 0,
-    },
-    {
-      id: `plan-vocab-${dailyPlan.date}-${rotation}-2`,
-      phrase: "I can explain my next step clearly.",
-      translation: "Eu consigo explicar meu próximo passo com clareza.",
-      level: user.currentLevel,
-      category: "Current plan",
-      sentences: [
-        { text: "I can explain my next step clearly.", translation: "Eu consigo explicar meu próximo passo com clareza." },
-        { text: "I can explain the blocker clearly.", translation: "Eu consigo explicar o bloqueio com clareza." },
-        { text: "I can explain the expected result clearly.", translation: "Eu consigo explicar o resultado esperado com clareza." },
-      ],
-      confidence: 50,
-      nextReviewAt: nextReview.toISOString(),
-      hits: 0,
-      misses: 0,
-      source: "plan_generated",
-      timesPracticed: 0,
-      timesCorrect: 0,
-      timesWrong: 0,
-    },
-  ];
+  return uniqueBy(
+    [
+      makeItem(
+        "review-core",
+        profile.enabled ? `I need to clarify the ${primaryTerm} first.` : "I need to confirm one detail first.",
+        profile.enabled ? `Preciso esclarecer ${primaryTermPtBr} primeiro.` : "Preciso confirmar um detalhe primeiro.",
+        profile.enabled ? `${profile.area} review bridge` : "Current plan review bridge",
+        [
+          { text: profile.phrases[0], translation: translateGeneratedPhrase(profile.phrases[0], profile.area) },
+          { text: `I need to confirm the ${primaryTerm}.`, translation: `Preciso confirmar ${primaryTermPtBr}.` },
+          { text: `The ${secondaryTerm} is important for the next step.`, translation: `${secondaryTermPtBr} é importante para o próximo passo.` },
+        ]
+      ),
+      ...rotateItems(progressionItems[level], dailyProgressionSeed(dailyPlan, user)).slice(0, 2),
+      makeItem(
+        "clear-next-step",
+        "I can explain my next step clearly.",
+        "Eu consigo explicar meu próximo passo com clareza.",
+        "Current plan consolidation",
+        [
+          { text: "I can explain my next step clearly.", translation: "Eu consigo explicar meu próximo passo com clareza." },
+          { text: "I can explain the blocker clearly.", translation: "Eu consigo explicar o bloqueio com clareza." },
+          { text: "I can explain the expected result clearly.", translation: "Eu consigo explicar o resultado esperado com clareza." },
+        ]
+      ),
+    ],
+    (item) => item.phrase
+  );
 };
 
-const buildPlanThinkPrompt = (dailyPlan: DailyPlan): ThinkInEnglishPrompt => ({
-  id: `plan-think-${dailyPlan.date}-${getPlanRotation(dailyPlan)}`,
-  userMessage: "Quero falar sobre meu plano de estudo de hoje.",
-  coachReply: "Start in English with one short sentence: Today, I want to practice...",
-});
+const buildPlanThinkPrompt = (dailyPlan: DailyPlan, user: UserProfile): ThinkInEnglishPrompt => {
+  const level = normalizeLevel(user.currentLevel);
+  const prompts: Record<EnglishLevel, Omit<ThinkInEnglishPrompt, "id">> = {
+    A1: {
+      userMessage: "Quero falar sobre meu plano de estudo de hoje.",
+      coachReply: "Start in English with one short sentence: Today, I want to practice...",
+    },
+    A2: {
+      userMessage: "Quero usar uma frase antiga com uma ideia nova.",
+      coachReply: "Use this frame: I practiced this before, and now I can...",
+    },
+    B1: {
+      userMessage: "Quero explicar o motivo de uma decisão.",
+      coachReply: "Build a B1 answer: The reason is... If this changes, we should...",
+    },
+    B2: {
+      userMessage: "Quero priorizar uma tarefa com nuance.",
+      coachReply: "Try: I would prioritize..., unless... Then add one clear constraint.",
+    },
+    C1: {
+      userMessage: "Quero fazer uma recomendação profissional curta.",
+      coachReply: "Try: Given..., I would recommend... The main risk is...",
+    },
+  };
+
+  return {
+    id: `plan-think-${dailyPlan.date}-${level}-${getPlanRotation(dailyPlan)}`,
+    ...prompts[level],
+  };
+};
 
 const toPlainVocabulary = (item: any): VocabularyItem => ({
   id: String(item._id ?? item.id),
@@ -810,6 +1191,35 @@ const hydrateShadowingItems = (items: any[] = []) => {
       return normalized;
     })
     .filter((item): item is ShadowingItem => Boolean(item));
+};
+
+const orderVocabularyForLevel = (items: VocabularyItem[], user: UserProfile, dailyPlan: DailyPlan) => {
+  const level = normalizeLevel(user.currentLevel);
+  const allowedLevels = allowedReviewLevels(level);
+  const rotated = rotateItems(items, dailyProgressionSeed(dailyPlan, user));
+  const nearLevel = rotated.filter((item) => allowedLevels.has(normalizeLevel(item.level)));
+  const stretch = rotated.filter((item) => !allowedLevels.has(normalizeLevel(item.level)));
+
+  return [...nearLevel, ...stretch].sort((a, b) => {
+    const confidenceDelta = (a.confidence ?? 50) - (b.confidence ?? 50);
+
+    if (Math.abs(confidenceDelta) >= 20) {
+      return confidenceDelta;
+    }
+
+    return levelDistance(level, normalizeLevel(a.level)) - levelDistance(level, normalizeLevel(b.level));
+  });
+};
+
+const orderListeningForLevel = (items: ListeningLesson[], user: UserProfile, dailyPlan: DailyPlan) => {
+  const level = normalizeLevel(user.currentLevel);
+  const allowedLevels = allowedReviewLevels(level);
+  const rotated = rotateItems(items, dailyProgressionSeed(dailyPlan, user));
+
+  return [
+    ...rotated.filter((item) => allowedLevels.has(normalizeLevel(item.level))),
+    ...rotated.filter((item) => !allowedLevels.has(normalizeLevel(item.level))),
+  ];
 };
 
 export class ContentRepository {
@@ -878,30 +1288,32 @@ export class ContentRepository {
     dailyPlan: DailyPlan,
     history: PersonalizationHistory = {}
   ): LearningContent {
-    const rotation = getPlanRotation(dailyPlan);
+    const seed = dailyProgressionSeed(dailyPlan, user);
     const shadowingCandidates = buildPlanShadowingItems(user, dailyPlan);
+    const vocabularyCatalog = orderVocabularyForLevel(content.vocabulary, user, dailyPlan);
+    const listeningCatalog = orderListeningForLevel(content.listeningLessons, user, dailyPlan);
 
     return {
       vocabulary: uniqueBy(
         [
           ...buildPlanVocabulary(user, dailyPlan),
-          ...rotateItems(content.vocabulary, rotation),
+          ...vocabularyCatalog,
         ],
         (item) => item.phrase
       ),
       listeningLessons: uniqueBy(
         [
           buildPlanListeningLesson(user, dailyPlan),
-          ...rotateItems(content.listeningLessons, rotation),
+          ...listeningCatalog,
         ],
         (item) => item.id
       ),
-      shadowingItems: selectShadowingItems(shadowingCandidates, rotateItems(content.shadowingItems, rotation), dailyPlan, history),
-      conversationModes: rotateItems(content.conversationModes, rotation),
-      developerModes: rotateItems(content.developerModes, rotation),
+      shadowingItems: selectShadowingItems(shadowingCandidates, rotateItems(content.shadowingItems, seed), dailyPlan, history),
+      conversationModes: rotateItems(content.conversationModes, seed),
+      developerModes: rotateItems(content.developerModes, seed),
       thinkInEnglishPrompts: [
-        buildPlanThinkPrompt(dailyPlan),
-        ...rotateItems(content.thinkInEnglishPrompts, rotation),
+        buildPlanThinkPrompt(dailyPlan, user),
+        ...rotateItems(content.thinkInEnglishPrompts, seed),
       ],
     };
   }

@@ -53,7 +53,7 @@ describe("ContentRepository.personalizeForPlan", () => {
     const result = repository.personalizeForPlan(
       content,
       buildProfile("Falar em reuniões e entrevistas"),
-      firstRotationDailyPlan
+      { ...firstRotationDailyPlan, date: "2026-01-03" }
     );
 
     const generatedLesson = result.listeningLessons[0];
@@ -84,7 +84,7 @@ describe("ContentRepository.personalizeForPlan", () => {
         professionalFocusMode: "profession",
         professionValidationStatus: "verified",
       }),
-      firstRotationDailyPlan
+      { ...firstRotationDailyPlan, date: "2026-01-03" }
     );
 
     const generatedShadowing = result.shadowingItems.find(
@@ -149,7 +149,7 @@ describe("ContentRepository.personalizeForPlan", () => {
       professionValidationStatus: "verified",
     });
 
-    const result = repository.personalizeForPlan(content, profile, firstRotationDailyPlan);
+    const result = repository.personalizeForPlan(content, profile, { ...firstRotationDailyPlan, date: "2026-01-03" });
     const listeningTranslations = result.listeningLessons[0].comprehension?.map((item) => item.translationPtBr) ?? [];
     const allVocabularyTranslations = result.vocabulary.flatMap((item) => [
       item.translation,
@@ -162,5 +162,49 @@ describe("ContentRepository.personalizeForPlan", () => {
     );
     expect(allVocabularyTranslations).toContain("Preciso esclarecer problema primeiro.");
     expect(allVocabularyTranslations).toContain("Preciso confirmar problema.");
+  });
+
+  it("adds genuinely different progression language when the user moves from A2 to B1", () => {
+    const repository = new ContentRepository();
+    const content = {
+      vocabulary: [],
+      listeningLessons: [],
+      shadowingItems: [],
+      conversationModes: [],
+      developerModes: [],
+      thinkInEnglishPrompts: [],
+    };
+    const profile = buildProfile("Falar melhor no trabalho", {
+      profession: "Developer",
+      professionalFocusMode: "profession",
+      professionValidationStatus: "verified",
+    });
+
+    const a2Content = repository.personalizeForPlan(content, { ...profile, currentLevel: "A2" }, firstRotationDailyPlan);
+    const b1Content = repository.personalizeForPlan(content, { ...profile, currentLevel: "B1" }, firstRotationDailyPlan);
+
+    expect(a2Content.vocabulary.map((item) => item.phrase).join(" ")).toContain("I practiced this before");
+    expect(a2Content.thinkInEnglishPrompts[0].coachReply).toContain("I practiced this before");
+    expect(b1Content.vocabulary.map((item) => item.phrase).join(" ")).toContain("If the bug changes");
+    expect(b1Content.thinkInEnglishPrompts[0].coachReply).toContain("The reason is");
+  });
+
+  it("changes the generated listening focus across different study dates", () => {
+    const repository = new ContentRepository();
+    const content = {
+      vocabulary: [],
+      listeningLessons: [],
+      shadowingItems: [],
+      conversationModes: [],
+      developerModes: [],
+      thinkInEnglishPrompts: [],
+    };
+    const profile = buildProfile("Falar melhor no trabalho", { currentLevel: "A2" });
+
+    const firstDay = repository.personalizeForPlan(content, profile, { ...dailyPlan, date: "2026-01-01" });
+    const secondDay = repository.personalizeForPlan(content, profile, { ...dailyPlan, date: "2026-01-02" });
+
+    expect(firstDay.listeningLessons[0].id).not.toBe(secondDay.listeningLessons[0].id);
+    expect(firstDay.listeningLessons[0].title).not.toBe(secondDay.listeningLessons[0].title);
   });
 });

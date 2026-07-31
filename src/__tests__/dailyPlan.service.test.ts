@@ -102,6 +102,20 @@ describe("DailyPlanService.generatePlan", () => {
 });
 
 describe("DailyPlanService.recordBlockEvidence", () => {
+  it("regenerates an untouched existing plan when the profile level changes", async () => {
+    const profile = buildProfile(25);
+    const { repository } = buildRepository(profile);
+    const planService = new DailyPlanService(repository);
+
+    const first = await planService.createOrGetTodayPlan("user-1");
+    profile.currentLevel = "A2";
+    const second = await planService.createOrGetTodayPlan("user-1");
+
+    expect(first.dailyPlan.generationReason).toContain("level=A1");
+    expect(second.dailyPlan.generationReason).toContain("level=A2");
+    expect(repository.savePlan).toHaveBeenCalledTimes(2);
+  });
+
   it("records partial progress without completing the block too early", async () => {
     const { repository } = buildRepository();
     const planService = new DailyPlanService(repository);

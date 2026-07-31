@@ -13,6 +13,9 @@ import { ProgressService } from "./progress.service";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
+const numericDateSeed = (date: string) =>
+  date.split("-").reduce((sum, part) => sum + Number(part), 0);
+
 const blockTemplates: Record<StudyBlockType, Omit<StudyBlock, "id" | "durationMinutes" | "status" | "progress">> = {
   shadowing: {
     title: "Shadowing",
@@ -245,9 +248,18 @@ const buildProfessionalObjective = (block: StudyBlockType, profession: string) =
   return objectives[block];
 };
 
+const levelFocus: Record<EnglishLevel, string> = {
+  A1: "A1 core: short sentences, useful questions, and clear answers.",
+  A2: "A2 bridge: past actions, future plans, polite requests, and short reasons.",
+  B1: "B1 expansion: reasons, tradeoffs, conditionals, and follow-up questions.",
+  B2: "B2 precision: nuance, prioritization, constraints, and clearer explanations.",
+  C1: "C1 polish: concise recommendations, synthesis, hedging, and professional tone.",
+};
+
 const buildFocus = (profile: UserProfile) => {
+  const level = normalizeLevel(profile.currentLevel);
   if (profile.professionalFocusMode === "profession") {
-    return `Professional focus: English for ${profile.profession}. Goal: ${profile.primaryGoal}`;
+    return `${levelFocus[level]} Professional focus: English for ${profile.profession}. Goal: ${profile.primaryGoal}`;
   }
 
   const focusByDifficulty: Record<UserProfile["mainDifficulty"], string> = {
@@ -257,10 +269,55 @@ const buildFocus = (profile: UserProfile) => {
     pronunciation: "Improve clarity with shadowing and controlled repetition.",
   };
 
-  return `${focusByDifficulty[profile.mainDifficulty]} Goal: ${profile.primaryGoal}`;
+  return `${levelFocus[level]} ${focusByDifficulty[profile.mainDifficulty]} Goal: ${profile.primaryGoal}`;
 };
 
 const levelBand = (level: EnglishLevel) => level;
+
+const normalizeProfileText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const profileSignature = (profile: UserProfile) => {
+  const level = normalizeLevel(profile.currentLevel);
+  const difficulty = normalizeDifficulty(profile.mainDifficulty);
+
+  return [
+    `level=${level}`,
+    `difficulty=${difficulty}`,
+    `minutes=${Math.max(10, Math.min(120, Math.round(profile.dailyMinutes)))}`,
+    `goal=${normalizeProfileText(profile.primaryGoal)}`,
+    `professionMode=${profile.professionalFocusMode ?? "standard"}`,
+    `profession=${normalizeProfileText(profile.profession)}`,
+  ].join("|");
+};
+
+const planMatchesProfile = (plan: DailyPlan, profile: UserProfile) =>
+  plan.generationReason?.includes(`Profile snapshot: ${profileSignature(profile)}`);
+
+const planHasUserProgress = (plan: DailyPlan) =>
+  plan.status === "in_progress" ||
+  plan.status === "completed" ||
+  plan.blocks.some((block) => {
+    const progress = block.progressPercentage ?? block.progress ?? 0;
+
+    return (
+      progress > 0 ||
+      block.status === "in_progress" ||
+      block.status === "completed" ||
+      Boolean(block.startedAt) ||
+      (block.completedSteps ?? 0) > 0 ||
+      (block.requiredSteps ?? []).some((step) => step.status === "completed")
+    );
+  });
+
+const dailyRotation = (date: string, progress?: ProgressSnapshot) =>
+  numericDateSeed(date) + (progress?.completedPlans ?? 0) + (progress?.streakDays ?? 0);
 
 const distributeMinutes = (totalMinutes: number, weights: Record<StudyBlockType, number>) => {
   const blockTypes = Object.keys(weights) as StudyBlockType[];
@@ -405,6 +462,7 @@ export class DailyPlanService {
       generationMethod: "heuristic",
       generationReason: [
         `Generated deterministically from level ${level}, difficulty ${difficulty}, daily minutes, goal and professional context.`,
+        `Profile snapshot: ${profileSignature({ ...profile, currentLevel: level, mainDifficulty: difficulty })}.`,
         weakSkill.reason,
       ].filter(Boolean).join(" "),
       blocks,
@@ -445,12 +503,21 @@ export class DailyPlanService {
     const progress = await this.dailyPlanRepository.findOrCreateProgress(resolvedUser);
 
     if (existingPlan) {
+      if (!planMatchesProfile(existingPlan, resolvedUser) && !planHasUserProgress(existingPlan)) {
+        const refreshedPlan = await this.dailyPlanRepository.savePlan({
+          ...this.generatePlan(resolvedUser, date, dailyRotation(date, progress), { progress }),
+          streak: progress.streakDays,
+        });
+
+        return { user: resolvedUser, dailyPlan: refreshedPlan, progress };
+      }
+
       const normalizedPlan = await this.persistNormalizedPlan(existingPlan);
       return { user: resolvedUser, dailyPlan: normalizedPlan, progress };
     }
 
     const plan = await this.dailyPlanRepository.savePlan({
-      ...this.generatePlan(resolvedUser, date, 0, { progress }),
+      ...this.generatePlan(resolvedUser, date, dailyRotation(date, progress), { progress }),
       streak: progress.streakDays,
     });
 
@@ -466,7 +533,7 @@ export class DailyPlanService {
 
     const progress = await this.dailyPlanRepository.findOrCreateProgress(user);
     const plan = await this.dailyPlanRepository.savePlan({
-      ...this.generatePlan(user, todayKey(), 0, { progress }),
+      ...this.generatePlan(user, todayKey(), dailyRotation(todayKey(), progress), { progress }),
       streak: progress.streakDays,
     });
 

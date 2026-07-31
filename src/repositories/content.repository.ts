@@ -32,8 +32,45 @@ type CompletedActivitySummary = {
   completedAt: string;
 };
 
+type ListeningAttemptSummary = {
+  exerciseId: string;
+  expectedText?: string;
+  comprehensionCorrect?: boolean;
+  translationOpened?: boolean;
+  transcriptOpened?: boolean;
+  slowAudioUsed?: boolean;
+  replayCount?: number;
+  unknownWords?: string[];
+  completedAt: string;
+};
+
+type SpeakingAttemptSummary = {
+  id?: string;
+  expectedText: string;
+  transcribedText: string;
+  pronunciationScore: number;
+  naturalnessScore?: number;
+  connectedSpeechScore: number;
+  wordsSpokenCount: number;
+  correctedWords?: string[];
+  suggestion?: string | null;
+  createdAt?: string;
+};
+
 type PersonalizationHistory = {
   completedActivities?: CompletedActivitySummary[];
+  listeningAttempts?: ListeningAttemptSummary[];
+  recentSpeakingAttempts?: SpeakingAttemptSummary[];
+  dueReviewItems?: VocabularyItem[];
+};
+
+type TeacherMemory = {
+  recentlyTaughtPhrases: string[];
+  reviewPhrases: VocabularyItem[];
+  weakWords: string[];
+  correctionTargets: string[];
+  supportSignals: string[];
+  teacherFocus: string;
 };
 
 type PlanScenario = {
@@ -153,6 +190,58 @@ const learningStageCopy: Record<EnglishLevel, { focus: string; label: string }> 
 const dailyProgressionSeed = (dailyPlan: DailyPlan, user: UserProfile) =>
   numericDateSeed(dailyPlan.date) + getPlanRotation(dailyPlan) + levelRank(normalizeLevel(user.currentLevel));
 
+const buildTeacherMemory = (history: PersonalizationHistory = {}): TeacherMemory => {
+  const completed = [...(history.completedActivities ?? [])].sort(
+    (a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)
+  );
+  const listening = [...(history.listeningAttempts ?? [])].sort(
+    (a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)
+  );
+  const speaking = [...(history.recentSpeakingAttempts ?? [])].sort(
+    (a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "")
+  );
+  const dueReviewItems = history.dueReviewItems ?? [];
+  const recentlyTaughtPhrases = uniqueNormalized([
+    ...completed.map((activity) => activity.title),
+    ...listening.map((attempt) => attempt.expectedText ?? ""),
+    ...speaking.map((attempt) => attempt.expectedText),
+  ]).slice(0, 8);
+  const weakWords = rankWords([
+    ...listening.flatMap((attempt) => attempt.unknownWords ?? []),
+    ...speaking.flatMap((attempt) => attempt.correctedWords ?? []),
+    ...dueReviewItems
+      .filter((item) => (item.misses ?? 0) > (item.hits ?? 0))
+      .flatMap((item) => extractMemoryWords(item.phrase)),
+  ]).slice(0, 8);
+  const correctionTargets = uniqueNormalized([
+    ...speaking.flatMap((attempt) => attempt.correctedWords ?? []),
+    ...speaking.map((attempt) => attempt.suggestion ?? ""),
+    ...dueReviewItems.filter((item) => (item.misses ?? 0) > 0).map((item) => item.phrase),
+  ]).slice(0, 6);
+  const supportSignals = [
+    listening.some((attempt) => attempt.translationOpened) ? "translation_support" : "",
+    listening.some((attempt) => attempt.transcriptOpened) ? "transcript_support" : "",
+    listening.some((attempt) => attempt.slowAudioUsed) ? "slow_audio_support" : "",
+    listening.some((attempt) => Number(attempt.replayCount ?? 0) >= 3) ? "repeated_listening" : "",
+    speaking.some((attempt) => attempt.pronunciationScore < 6) ? "pronunciation_accuracy" : "",
+    speaking.some((attempt) => attempt.connectedSpeechScore < 6) ? "connected_speech" : "",
+  ].filter(Boolean);
+  const teacherFocus = [
+    dueReviewItems.length ? `review ${compactPhrase(dueReviewItems[0].phrase, 8)}` : "",
+    weakWords.length ? `repair ${weakWords.slice(0, 3).join(", ")}` : "",
+    recentlyTaughtPhrases.length ? `reuse ${compactPhrase(recentlyTaughtPhrases[0], 8)}` : "",
+  ].filter(Boolean).join("; ") || "introduce one new pattern and keep one old phrase active";
+
+  return {
+    recentlyTaughtPhrases,
+    reviewPhrases: dueReviewItems.slice(0, 6),
+    weakWords,
+    correctionTargets,
+    supportSignals,
+    teacherFocus,
+  };
+};
+
 const normalizeGoalText = (value: string) =>
   value
     .toLowerCase()
@@ -241,6 +330,88 @@ const normalizeProfessionText = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+
+const memoryStopWords = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "before",
+  "can",
+  "could",
+  "for",
+  "from",
+  "have",
+  "i",
+  "in",
+  "is",
+  "it",
+  "me",
+  "my",
+  "now",
+  "of",
+  "on",
+  "please",
+  "that",
+  "the",
+  "this",
+  "to",
+  "we",
+  "with",
+  "you",
+]);
+
+const extractMemoryWords = (text: string) =>
+  normalizeContentKey(text)
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !memoryStopWords.has(word));
+
+const compactPhrase = (value: string, maxWords = 11) => {
+  const words = value.trim().replace(/\s+/g, " ").split(/\s+/).filter(Boolean);
+
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+
+  return `${words.slice(0, maxWords).join(" ")}...`;
+};
+
+const uniqueNormalized = (items: string[]) => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const item of items) {
+    const text = item.trim().replace(/\s+/g, " ");
+    const key = normalizeContentKey(text);
+
+    if (!text || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(text);
+  }
+
+  return result;
+};
+
+const rankWords = (words: string[]) => {
+  const counts = new Map<string, number>();
+
+  for (const word of words) {
+    const normalized = normalizeContentKey(word);
+
+    if (!normalized || memoryStopWords.has(normalized)) {
+      continue;
+    }
+
+    counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([word]) => word);
+};
 
 const professionalTermTranslations: Record<string, string> = {
   access: "acesso",
@@ -409,7 +580,7 @@ const professionalProfile = (user: UserProfile) => {
   };
 };
 
-const buildLevelProgressionScenarios = (user: UserProfile) => {
+const buildLevelProgressionScenarios = (user: UserProfile, memory: TeacherMemory) => {
   const level = normalizeLevel(user.currentLevel);
   const stage = learningStageCopy[level];
   const profile = professionalProfile(user);
@@ -535,9 +706,48 @@ const buildLevelProgressionScenarios = (user: UserProfile) => {
   return scenarios[level];
 };
 
-const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
+const buildMemoryScenario = (memory: TeacherMemory): PlanScenario | null => {
+  const reviewPhrase = memory.reviewPhrases[0]?.phrase ?? memory.recentlyTaughtPhrases[0];
+  const weakWord = memory.weakWords[0];
+
+  if (!reviewPhrase && !weakWord) {
+    return null;
+  }
+
+  const compactReviewPhrase = compactPhrase(reviewPhrase ?? "the phrase from yesterday", 9);
+  const targetWord = weakWord ?? extractMemoryWords(reviewPhrase ?? "")[0] ?? "phrase";
+
+  return {
+    title: "Teacher Memory Review",
+    situation: "A teacher-led review that connects yesterday's content with today's next step.",
+    dialogue: [
+      "Teacher: What did we practice recently?",
+      `Student: We practiced "${compactReviewPhrase}".`,
+      "Teacher: What should we improve today?",
+      `Student: I will use "${targetWord}" in a new sentence and say it clearly.`,
+    ],
+    translations: [
+      "O que praticamos recentemente?",
+      `Nós praticamos "${compactReviewPhrase}".`,
+      "O que devemos melhorar hoje?",
+      `Vou usar "${targetWord}" em uma frase nova e falar com clareza.`,
+    ],
+    questions: [
+      { prompt: "What did the student practice recently?", answer: compactReviewPhrase },
+      { prompt: "What will the student improve today?", answer: targetWord },
+    ],
+  };
+};
+
+const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan, memory: TeacherMemory) => {
   const goal = buildGoalContext(user.primaryGoal);
   const profile = professionalProfile(user);
+  const memoryScenario = buildMemoryScenario(memory);
+
+  if (memoryScenario) {
+    return memoryScenario;
+  }
+
   const scenarios: PlanScenario[] = [
     {
       title: "Planning the Next Task",
@@ -621,7 +831,7 @@ const buildPlanScenario = (user: UserProfile, dailyPlan: DailyPlan) => {
         { prompt: "What does the student confirm?", answer: "The priority and the deadline." },
       ],
     },
-    ...buildLevelProgressionScenarios(user),
+    ...buildLevelProgressionScenarios(user, memory),
   ];
 
   return scenarios[dailyProgressionSeed(dailyPlan, user) % scenarios.length];
@@ -706,7 +916,7 @@ const translateGeneratedPhrase = (phrase: string, area: string) => {
   return `Frase útil para ${areaPtBr}.`;
 };
 
-const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan): ShadowingItem[] => {
+const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan, memory: TeacherMemory): ShadowingItem[] => {
   const goal = buildGoalContext(user.primaryGoal);
   const profile = professionalProfile(user);
   const area = profile.area;
@@ -793,6 +1003,38 @@ const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan): Shad
     },
   ];
   const level = normalizeLevel(user.currentLevel);
+  const memorySpecs = [
+    ...(memory.recentlyTaughtPhrases[0]
+      ? [
+          {
+            text: `I practiced "${compactPhrase(memory.recentlyTaughtPhrases[0], 8)}" before, and today I can use it again.`,
+            translation: `Eu pratiquei "${compactPhrase(memory.recentlyTaughtPhrases[0], 8)}" antes, e hoje consigo usar de novo.`,
+            explanation: "Use para transformar conteúdo antigo em fala ativa novamente.",
+            tip: "Faça uma pausa breve depois da frase revisada e termine com confiança.",
+          },
+        ]
+      : []),
+    ...(memory.weakWords[0]
+      ? [
+          {
+            text: `I will practice the word "${memory.weakWords[0]}" in a clear sentence.`,
+            translation: `Vou praticar a palavra "${memory.weakWords[0]}" em uma frase clara.`,
+            explanation: "Use para atacar uma palavra que apareceu como fraca no seu histórico.",
+            tip: "Diga a palavra-alvo devagar uma vez, depois repita a frase inteira.",
+          },
+        ]
+      : []),
+    ...(memory.supportSignals.includes("connected_speech")
+      ? [
+          {
+            text: "I will connect the words, but I will not rush.",
+            translation: "Vou conectar as palavras, mas não vou correr.",
+            explanation: "Use quando o histórico mostra que fluidez e conexão precisam de atenção.",
+            tip: "Conecte 'will connect' e mantenha 'not rush' bem claro.",
+          },
+        ]
+      : []),
+  ];
   const levelSpecs: Record<EnglishLevel, typeof specs> = {
     A1: [
       {
@@ -877,7 +1119,7 @@ const buildShadowingCandidates = (user: UserProfile, dailyPlan: DailyPlan): Shad
       },
     ],
   };
-  const mixedSpecs = rotateItems([...specs, ...levelSpecs[level]], dailyProgressionSeed(dailyPlan, user));
+  const mixedSpecs = rotateItems([...memorySpecs, ...specs, ...levelSpecs[level]], dailyProgressionSeed(dailyPlan, user));
 
   return mixedSpecs.map((spec) =>
     buildShadowingItem({
@@ -923,9 +1165,9 @@ const selectShadowingItems = (
   return uniqueBy([...selected, ...pool], (item) => item.text).slice(0, 4);
 };
 
-const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan): ListeningLesson => {
+const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan, memory: TeacherMemory): ListeningLesson => {
   const rotation = getPlanRotation(dailyPlan);
-  const scenario = buildPlanScenario(user, dailyPlan);
+  const scenario = buildPlanScenario(user, dailyPlan, memory);
   const level = normalizeLevel(user.currentLevel);
   const scenarioKey = stableContentId("listening", `${dailyPlan.date}-${level}-${scenario.title}`);
 
@@ -955,10 +1197,10 @@ const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan): List
   };
 };
 
-const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan): ShadowingItem[] =>
-  buildShadowingCandidates(user, dailyPlan);
+const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan, memory: TeacherMemory): ShadowingItem[] =>
+  buildShadowingCandidates(user, dailyPlan, memory);
 
-const buildPlanVocabulary = (user: UserProfile, dailyPlan: DailyPlan): VocabularyItem[] => {
+const buildPlanVocabulary = (user: UserProfile, dailyPlan: DailyPlan, memory: TeacherMemory): VocabularyItem[] => {
   const rotation = getPlanRotation(dailyPlan);
   const level = normalizeLevel(user.currentLevel);
   const profile = professionalProfile(user);
@@ -1073,9 +1315,66 @@ const buildPlanVocabulary = (user: UserProfile, dailyPlan: DailyPlan): Vocabular
       ),
     ],
   };
+  const memoryItems = [
+    ...memory.reviewPhrases.map((item, index) => ({
+      ...item,
+      id: `memory-review-${dailyPlan.date}-${index + 1}-${item.id}`,
+      category: `Teacher review: ${item.category}`,
+      source: item.source ?? "teacher_memory",
+    })),
+    ...(memory.weakWords[0]
+      ? [
+          makeItem(
+            "memory-weak-word",
+            `I need to use "${memory.weakWords[0]}" in a complete sentence.`,
+            `Preciso usar "${memory.weakWords[0]}" em uma frase completa.`,
+            "Teacher memory repair",
+            [
+              {
+                text: `I need to use "${memory.weakWords[0]}" in a complete sentence.`,
+                translation: `Preciso usar "${memory.weakWords[0]}" em uma frase completa.`,
+              },
+              {
+                text: `Can you give me one example with "${memory.weakWords[0]}"?`,
+                translation: `Você pode me dar um exemplo com "${memory.weakWords[0]}"?`,
+              },
+              {
+                text: "I will repeat it once and then use it in context.",
+                translation: "Vou repetir uma vez e depois usar em contexto.",
+              },
+            ]
+          ),
+        ]
+      : []),
+    ...(memory.recentlyTaughtPhrases[0]
+      ? [
+          makeItem(
+            "memory-old-new",
+            "I can reuse an old phrase in a new situation.",
+            "Eu consigo reutilizar uma frase antiga em uma situação nova.",
+            "Teacher memory bridge",
+            [
+              {
+                text: `I practiced "${compactPhrase(memory.recentlyTaughtPhrases[0], 8)}" before.`,
+                translation: `Eu pratiquei "${compactPhrase(memory.recentlyTaughtPhrases[0], 8)}" antes.`,
+              },
+              {
+                text: "Now I can use it in a new situation.",
+                translation: "Agora consigo usar isso em uma situação nova.",
+              },
+              {
+                text: "This helps me speak with less translation.",
+                translation: "Isso me ajuda a falar com menos tradução.",
+              },
+            ]
+          ),
+        ]
+      : []),
+  ];
 
   return uniqueBy(
     [
+      ...memoryItems,
       makeItem(
         "review-core",
         profile.enabled ? `I need to clarify the ${primaryTerm} first.` : "I need to confirm one detail first.",
@@ -1104,8 +1403,21 @@ const buildPlanVocabulary = (user: UserProfile, dailyPlan: DailyPlan): Vocabular
   );
 };
 
-const buildPlanThinkPrompt = (dailyPlan: DailyPlan, user: UserProfile): ThinkInEnglishPrompt => {
+const buildPlanThinkPrompt = (dailyPlan: DailyPlan, user: UserProfile, memory: TeacherMemory): ThinkInEnglishPrompt => {
   const level = normalizeLevel(user.currentLevel);
+  const hasMemoryEvidence = Boolean(
+    memory.recentlyTaughtPhrases.length ||
+      memory.reviewPhrases.length ||
+      memory.weakWords.length ||
+      memory.correctionTargets.length ||
+      memory.supportSignals.length
+  );
+  const memoryPrompt = hasMemoryEvidence
+    ? {
+        userMessage: "Quero que você use meu histórico para escolher meu próximo passo.",
+        coachReply: `Teacher memory: ${memory.teacherFocus}. Use one old phrase, then add one new sentence for ${level}.`,
+      }
+    : null;
   const prompts: Record<EnglishLevel, Omit<ThinkInEnglishPrompt, "id">> = {
     A1: {
       userMessage: "Quero falar sobre meu plano de estudo de hoje.",
@@ -1131,7 +1443,7 @@ const buildPlanThinkPrompt = (dailyPlan: DailyPlan, user: UserProfile): ThinkInE
 
   return {
     id: `plan-think-${dailyPlan.date}-${level}-${getPlanRotation(dailyPlan)}`,
-    ...prompts[level],
+    ...(memoryPrompt ?? prompts[level]),
   };
 };
 
@@ -1289,21 +1601,22 @@ export class ContentRepository {
     history: PersonalizationHistory = {}
   ): LearningContent {
     const seed = dailyProgressionSeed(dailyPlan, user);
-    const shadowingCandidates = buildPlanShadowingItems(user, dailyPlan);
+    const memory = buildTeacherMemory(history);
+    const shadowingCandidates = buildPlanShadowingItems(user, dailyPlan, memory);
     const vocabularyCatalog = orderVocabularyForLevel(content.vocabulary, user, dailyPlan);
     const listeningCatalog = orderListeningForLevel(content.listeningLessons, user, dailyPlan);
 
     return {
       vocabulary: uniqueBy(
         [
-          ...buildPlanVocabulary(user, dailyPlan),
+          ...buildPlanVocabulary(user, dailyPlan, memory),
           ...vocabularyCatalog,
         ],
         (item) => item.phrase
       ),
       listeningLessons: uniqueBy(
         [
-          buildPlanListeningLesson(user, dailyPlan),
+          buildPlanListeningLesson(user, dailyPlan, memory),
           ...listeningCatalog,
         ],
         (item) => item.id
@@ -1312,7 +1625,7 @@ export class ContentRepository {
       conversationModes: rotateItems(content.conversationModes, seed),
       developerModes: rotateItems(content.developerModes, seed),
       thinkInEnglishPrompts: [
-        buildPlanThinkPrompt(dailyPlan, user),
+        buildPlanThinkPrompt(dailyPlan, user, memory),
         ...rotateItems(content.thinkInEnglishPrompts, seed),
       ],
     };

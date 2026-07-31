@@ -207,4 +207,85 @@ describe("ContentRepository.personalizeForPlan", () => {
     expect(firstDay.listeningLessons[0].id).not.toBe(secondDay.listeningLessons[0].id);
     expect(firstDay.listeningLessons[0].title).not.toBe(secondDay.listeningLessons[0].title);
   });
+
+  it("uses teacher memory to prioritize due review and repair weak words", () => {
+    const repository = new ContentRepository();
+    const content = {
+      vocabulary: [],
+      listeningLessons: [],
+      shadowingItems: [],
+      conversationModes: [],
+      developerModes: [],
+      thinkInEnglishPrompts: [],
+    };
+    const profile = buildProfile("Falar melhor no trabalho", {
+      currentLevel: "A2",
+      profession: "Developer",
+      professionalFocusMode: "profession",
+      professionValidationStatus: "verified",
+    });
+
+    const result = repository.personalizeForPlan(content, profile, dailyPlan, {
+      completedActivities: [
+        {
+          type: "shadowing",
+          itemId: "shadowing-old",
+          title: "I need to check the API response before I continue.",
+          completedAt: "2026-07-12T10:00:00.000Z",
+        },
+      ],
+      listeningAttempts: [
+        {
+          exerciseId: "listening-1",
+          expectedText: "I am checking the deployment now.",
+          comprehensionCorrect: false,
+          translationOpened: true,
+          replayCount: 4,
+          unknownWords: ["deployment"],
+          completedAt: "2026-07-12T11:00:00.000Z",
+        },
+      ],
+      recentSpeakingAttempts: [
+        {
+          id: "attempt-1",
+          expectedText: "I will update the team after I check the deployment.",
+          transcribedText: "I will update the team after I check deploy",
+          pronunciationScore: 5,
+          naturalnessScore: 6,
+          connectedSpeechScore: 5,
+          wordsSpokenCount: 9,
+          correctedWords: ["deployment"],
+          suggestion: "Practice the final syllable in deployment.",
+          createdAt: "2026-07-12T12:00:00.000Z",
+        },
+      ],
+      dueReviewItems: [
+        {
+          id: "review-1",
+          phrase: "I need to check the API response before I continue.",
+          translation: "Eu preciso verificar a resposta da API antes de continuar.",
+          level: "A2",
+          category: "Developer",
+          sentences: [
+            {
+              text: "I need to check the API response before I continue.",
+              translation: "Eu preciso verificar a resposta da API antes de continuar.",
+            },
+          ],
+          confidence: 35,
+          nextReviewAt: "2026-07-12T09:00:00.000Z",
+          hits: 1,
+          misses: 2,
+          source: "user_saved",
+        },
+      ],
+    });
+
+    expect(result.vocabulary[0].phrase).toBe("I need to check the API response before I continue.");
+    expect(result.vocabulary.map((item) => item.phrase).join(" ")).toContain(
+      'I need to use "deployment" in a complete sentence.'
+    );
+    expect(result.thinkInEnglishPrompts[0].coachReply).toContain("review I need to check the API response");
+    expect(result.listeningLessons[0].dialogue.join(" ")).toContain("We practiced");
+  });
 });

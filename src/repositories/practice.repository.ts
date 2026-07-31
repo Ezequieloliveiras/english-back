@@ -7,7 +7,12 @@ export class PracticeRepository {
   async getUserCompletionState(userId: string) {
     const [activities, listeningAttempts] = await Promise.all([
       PracticeActivityModel.find({ userId, status: "completed" }).select("type itemId title completedAt"),
-      ListeningAttemptModel.find({ userId }).select("exerciseId completedAt"),
+      ListeningAttemptModel.find({ userId })
+        .sort({ completedAt: -1 })
+        .limit(20)
+        .select(
+          "exerciseId expectedText comprehensionCorrect translationOpened transcriptOpened slowAudioUsed replayCount unknownWords completedAt"
+        ),
     ]);
 
     return {
@@ -21,6 +26,13 @@ export class PracticeRepository {
       listeningAttempts: listeningAttempts.map((attempt) => ({
         id: toPlainId(attempt._id),
         exerciseId: attempt.exerciseId,
+        expectedText: attempt.expectedText,
+        comprehensionCorrect: attempt.comprehensionCorrect,
+        translationOpened: attempt.translationOpened,
+        transcriptOpened: attempt.transcriptOpened,
+        slowAudioUsed: attempt.slowAudioUsed,
+        replayCount: attempt.replayCount,
+        unknownWords: attempt.unknownWords ?? [],
         completedAt: attempt.completedAt?.toISOString?.() ?? String(attempt.completedAt),
       })),
     };

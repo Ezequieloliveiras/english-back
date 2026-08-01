@@ -29,11 +29,10 @@ class ReviewService {
             confidence: nextConfidence,
             nextReviewAt,
         });
-        const isReviewQueueItem = item.category.toLowerCase().includes("review");
         const planResult = await this.dailyPlanService.recordBlockEvidence({
             userId,
-            blockType: isReviewQueueItem ? "review" : "vocabulary",
-            evidenceType: isReviewQueueItem ? "retention_review" : "vocabulary_recall",
+            blockType: "review",
+            evidenceType: "retention_review",
             evidenceRef: itemId,
         });
         await this.progressService?.recordVocabularyReview({

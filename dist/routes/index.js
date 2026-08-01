@@ -62,9 +62,9 @@ const buildRouter = (contentController, audioController, authController, convers
     router.post("/ai/conversation", auth_middleware_1.requireAuth, aiController.conversation);
     router.post("/ai/dev-mode", auth_middleware_1.requireAuth, aiController.devMode);
     router.post("/ai/think-in-english", auth_middleware_1.requireAuth, aiController.thinkInEnglish);
-    router.post("/ai/vocabulary", auth_middleware_1.requireAuth, aiController.vocabulary);
     router.post("/ai/daily-plan", auth_middleware_1.requireAuth, aiController.dailyPlan);
     router.post("/ai/speaking-coach", auth_middleware_1.requireAuth, handleSpeakingCoachUpload, aiController.speakingCoach);
+    router.post("/ai/review-meaning", auth_middleware_1.requireAuth, handleSpeakingCoachUpload, aiController.reviewMeaning);
     router.post("/ai/analyze-mistake", auth_middleware_1.requireAuth, aiController.analyzeMistake);
     router.post("/practice/complete", auth_middleware_1.requireAuth, practiceController.complete);
     router.post("/practice/listening-attempts", auth_middleware_1.requireAuth, practiceController.listeningAttempt);

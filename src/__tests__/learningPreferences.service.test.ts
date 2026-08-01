@@ -6,7 +6,7 @@ import {
 } from "../services/learningPreferences.service";
 
 describe("learning preferences", () => {
-  test("preserves explicit interfaceLanguage when languageMode also changes", async () => {
+  test("forces English interface when languageMode is full_english", async () => {
     const repository = new SettingsRepository();
 
     const settings = await repository.update("user-interface", {
@@ -15,7 +15,7 @@ describe("learning preferences", () => {
     });
 
     expect(settings.languageMode).toBe("full_english");
-    expect(settings.interfaceLanguage).toBe("pt-BR");
+    expect(settings.interfaceLanguage).toBe("en");
   });
 
   test("keeps legacy languageMode fallback when interfaceLanguage is omitted", async () => {

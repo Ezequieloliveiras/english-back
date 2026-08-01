@@ -62,7 +62,8 @@ describe("DailyPlanService.generatePlan", () => {
     const plan = service.generatePlan(buildProfile(dailyMinutes), "2026-07-11");
 
     expect(plan.totalMinutes).toBe(dailyMinutes);
-    expect(plan.blocks).toHaveLength(6);
+    expect(plan.blocks).toHaveLength(5);
+    expect(plan.blocks.some((block) => block.type === "vocabulary")).toBe(false);
     expect(plan.blocks.every((block) => block.durationMinutes >= 1)).toBe(true);
     expect(plan.blocks.reduce((sum, block) => sum + block.durationMinutes, 0)).toBe(dailyMinutes);
   });
@@ -218,12 +219,6 @@ describe("DailyPlanService.recordBlockEvidence", () => {
       evidenceType: "conversation_task",
       evidenceRef: "conversation-1",
     });
-    await planService.recordBlockEvidence({
-      userId: "user-1",
-      blockType: "vocabulary",
-      evidenceType: "vocabulary_recall",
-      evidenceRef: "vocabulary-1",
-    });
     const result = await planService.recordBlockEvidence({
       userId: "user-1",
       blockType: "review",
@@ -243,20 +238,20 @@ describe("DailyPlanService.completeBlock", () => {
     const { repository } = buildRepository();
     const planService = new DailyPlanService(repository);
     const initial = await planService.createOrGetTodayPlan("user-1");
-    const vocabularyBlock = initial.dailyPlan.blocks.find((block) => block.type === "vocabulary");
+    const reviewBlock = initial.dailyPlan.blocks.find((block) => block.type === "review");
 
-    const result = await planService.completeBlock(initial.dailyPlan.id, vocabularyBlock!.id, "user-1");
-    const completedBlock = (result.body as any).dailyPlan.blocks.find((block: any) => block.id === vocabularyBlock!.id);
+    const result = await planService.completeBlock(initial.dailyPlan.id, reviewBlock!.id, "user-1");
+    const completedBlock = (result.body as any).dailyPlan.blocks.find((block: any) => block.id === reviewBlock!.id);
 
     expect(result.status).toBe(200);
     expect(completedBlock.status).toBe("completed");
     expect(completedBlock.progressPercentage).toBe(100);
-    expect((result.body as any).progress.studiedMinutesToday).toBe(vocabularyBlock?.durationMinutes);
+    expect((result.body as any).progress.studiedMinutesToday).toBe(reviewBlock?.durationMinutes);
 
-    const duplicate = await planService.completeBlock(initial.dailyPlan.id, vocabularyBlock!.id, "user-1");
+    const duplicate = await planService.completeBlock(initial.dailyPlan.id, reviewBlock!.id, "user-1");
     expect(duplicate.status).toBe(200);
     expect((duplicate.body as any).alreadyCompleted).toBe(true);
-    expect((duplicate.body as any).progress.studiedMinutesToday).toBe(vocabularyBlock?.durationMinutes);
+    expect((duplicate.body as any).progress.studiedMinutesToday).toBe(reviewBlock?.durationMinutes);
   });
 
   it("does not let a manual call complete the speaking coach block", async () => {

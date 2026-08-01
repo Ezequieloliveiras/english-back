@@ -24,7 +24,7 @@ export class ReviewController {
     const updated = await this.reviewService.recordReview(request.auth.userId, itemId, wasCorrect);
 
     if (!updated) {
-      response.status(404).json({ message: "Vocabulary item not found" });
+      response.status(404).json({ message: "Review item not found" });
       return;
     }
 

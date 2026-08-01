@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DailyPlanService = void 0;
 const todayKey = () => new Date().toISOString().slice(0, 10);
+const numericDateSeed = (date) => date.split("-").reduce((sum, part) => sum + Number(part), 0);
 const blockTemplates = {
     shadowing: {
         title: "Shadowing",
@@ -19,7 +20,7 @@ const blockTemplates = {
         objective: "Understand short, comprehensible dialogues without translating every word.",
     },
     vocabulary: {
-        title: "Vocabulary",
+        title: "Review",
         type: "vocabulary",
         objective: "Review complete sentences you can reuse in real situations.",
     },
@@ -136,22 +137,22 @@ const calculatePlanStatus = (plan) => {
 const baseWeights = {
     shadowing: 0.22,
     "speaking-coach": 0.16,
-    listening: 0.2,
-    vocabulary: 0.13,
-    conversation: 0.21,
-    review: 0.08,
+    listening: 0.22,
+    vocabulary: 0,
+    conversation: 0.24,
+    review: 0.16,
 };
 const difficultyBoost = {
-    speaking: { conversation: 0.1, "speaking-coach": 0.08, shadowing: 0.05, listening: -0.04, vocabulary: -0.03 },
-    listening: { listening: 0.14, shadowing: 0.03, conversation: -0.04, vocabulary: -0.03 },
-    vocabulary: { vocabulary: 0.14, review: 0.05, conversation: -0.04, shadowing: -0.03 },
-    pronunciation: { "speaking-coach": 0.12, shadowing: 0.1, conversation: 0.04, vocabulary: -0.04, review: -0.02 },
+    speaking: { conversation: 0.1, "speaking-coach": 0.08, shadowing: 0.05, listening: -0.04 },
+    listening: { listening: 0.14, shadowing: 0.03, conversation: -0.04 },
+    vocabulary: { review: 0.12, listening: 0.04 },
+    pronunciation: { "speaking-coach": 0.12, shadowing: 0.1, conversation: 0.04, review: -0.02 },
 };
 const levelBoost = {
-    A1: { listening: 0.07, vocabulary: 0.05, conversation: -0.05 },
+    A1: { listening: 0.07, review: 0.05, conversation: -0.05 },
     A2: { shadowing: 0.04, "speaking-coach": 0.03, conversation: 0.03 },
     B1: { conversation: 0.07, review: 0.02, listening: -0.03 },
-    B2: { conversation: 0.1, review: 0.03, vocabulary: -0.04 },
+    B2: { conversation: 0.1, review: 0.03 },
     C1: { conversation: 0.12, review: 0.04, listening: -0.04 },
 };
 const normalizeLevel = (level) => {
@@ -159,7 +160,7 @@ const normalizeLevel = (level) => {
     return ["A1", "A2", "B1", "B2", "C1"].includes(value) ? value : "A1";
 };
 const normalizeDifficulty = (difficulty) => {
-    if (["listening", "speaking", "vocabulary", "pronunciation"].includes(difficulty)) {
+    if (["listening", "speaking", "pronunciation"].includes(difficulty)) {
         return difficulty;
     }
     return "speaking";
@@ -170,13 +171,13 @@ const goalBoost = (goal) => {
         return { conversation: 0.08, "speaking-coach": 0.04, shadowing: 0.03 };
     }
     if (normalized.includes("listen") || normalized.includes("understand")) {
-        return { listening: 0.08, vocabulary: 0.02 };
+        return { listening: 0.08, review: 0.02 };
     }
     if (normalized.includes("interview") || normalized.includes("job")) {
         return { conversation: 0.07, review: 0.03 };
     }
     if (normalized.includes("developer") || normalized.includes("technical") || normalized.includes("work")) {
-        return { conversation: 0.05, vocabulary: 0.04, review: 0.02 };
+        return { conversation: 0.05, review: 0.05 };
     }
     return {};
 };
@@ -186,10 +187,9 @@ const professionBoost = (profile) => {
     }
     return {
         conversation: 0.08,
-        vocabulary: 0.06,
         listening: 0.04,
         shadowing: 0.03,
-        review: 0.02,
+        review: 0.06,
     };
 };
 const buildProfessionalObjective = (block, profession) => {
@@ -204,21 +204,61 @@ const buildProfessionalObjective = (block, profession) => {
     };
     return objectives[block];
 };
+const levelFocus = {
+    A1: "A1 core: short sentences, useful questions, and clear answers.",
+    A2: "A2 bridge: past actions, future plans, polite requests, and short reasons.",
+    B1: "B1 expansion: reasons, tradeoffs, conditionals, and follow-up questions.",
+    B2: "B2 precision: nuance, prioritization, constraints, and clearer explanations.",
+    C1: "C1 polish: concise recommendations, synthesis, hedging, and professional tone.",
+};
 const buildFocus = (profile) => {
+    const level = normalizeLevel(profile.currentLevel);
     if (profile.professionalFocusMode === "profession") {
-        return `Professional focus: English for ${profile.profession}. Goal: ${profile.primaryGoal}`;
+        return `${levelFocus[level]} Professional focus: English for ${profile.profession}. Goal: ${profile.primaryGoal}`;
     }
     const focusByDifficulty = {
         speaking: "Build speaking confidence with short, realistic conversations.",
         listening: "Train your ear with short, comprehensible input before output.",
-        vocabulary: "Turn sentence mining into phrases you can reuse today.",
+        vocabulary: "Strengthen recall with complete phrases you can reuse today.",
         pronunciation: "Improve clarity with shadowing and controlled repetition.",
     };
-    return `${focusByDifficulty[profile.mainDifficulty]} Goal: ${profile.primaryGoal}`;
+    return `${levelFocus[level]} ${focusByDifficulty[profile.mainDifficulty]} Goal: ${profile.primaryGoal}`;
 };
 const levelBand = (level) => level;
+const normalizeProfileText = (value) => value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+const profileSignature = (profile) => {
+    const level = normalizeLevel(profile.currentLevel);
+    const difficulty = normalizeDifficulty(profile.mainDifficulty);
+    return [
+        `level=${level}`,
+        `difficulty=${difficulty}`,
+        `minutes=${Math.max(10, Math.min(120, Math.round(profile.dailyMinutes)))}`,
+        `goal=${normalizeProfileText(profile.primaryGoal)}`,
+        `professionMode=${profile.professionalFocusMode ?? "standard"}`,
+        `profession=${normalizeProfileText(profile.profession)}`,
+    ].join("|");
+};
+const planMatchesProfile = (plan, profile) => plan.generationReason?.includes(`Profile snapshot: ${profileSignature(profile)}`);
+const planHasUserProgress = (plan) => plan.status === "in_progress" ||
+    plan.status === "completed" ||
+    plan.blocks.some((block) => {
+        const progress = block.progressPercentage ?? block.progress ?? 0;
+        return (progress > 0 ||
+            block.status === "in_progress" ||
+            block.status === "completed" ||
+            Boolean(block.startedAt) ||
+            (block.completedSteps ?? 0) > 0 ||
+            (block.requiredSteps ?? []).some((step) => step.status === "completed"));
+    });
+const dailyRotation = (date, progress) => numericDateSeed(date) + (progress?.completedPlans ?? 0) + (progress?.streakDays ?? 0);
 const distributeMinutes = (totalMinutes, weights) => {
-    const blockTypes = Object.keys(weights);
+    const blockTypes = Object.keys(weights).filter((type) => type !== "vocabulary");
     const safeTotal = Math.max(10, Math.min(120, Math.round(totalMinutes)));
     const normalizedTotal = blockTypes.reduce((sum, type) => sum + Math.max(0.04, weights[type]), 0);
     const preferredMinimum = safeTotal < 20 ? 3 : 4;
@@ -264,7 +304,7 @@ const weakestSkillBoost = (progress) => {
     const scores = [
         { skill: "listening", score: progress.listeningScore, boost: { listening: 0.08, shadowing: 0.03 } },
         { skill: "speaking", score: progress.speakingScore, boost: { conversation: 0.07, "speaking-coach": 0.04 } },
-        { skill: "vocabulary", score: progress.vocabularyScore, boost: { vocabulary: 0.08, review: 0.04 } },
+        { skill: "review", score: progress.vocabularyScore, boost: { review: 0.1, listening: 0.02 } },
         { skill: "pronunciation", score: progress.pronunciationScore, boost: { "speaking-coach": 0.08, shadowing: 0.05 } },
     ];
     const meaningful = scores.filter((entry) => entry.score > 0);
@@ -325,17 +365,21 @@ class DailyPlanService {
             generationMethod: "heuristic",
             generationReason: [
                 `Generated deterministically from level ${level}, difficulty ${difficulty}, daily minutes, goal and professional context.`,
+                `Profile snapshot: ${profileSignature({ ...profile, currentLevel: level, mainDifficulty: difficulty })}.`,
                 weakSkill.reason,
             ].filter(Boolean).join(" "),
             blocks,
         };
     }
     normalizePlan(plan) {
-        const blocks = plan.blocks.map((block) => calculateBlockProgress(block));
+        const blocks = plan.blocks
+            .filter((block) => block.type !== "vocabulary")
+            .map((block) => calculateBlockProgress(block));
         const planStatus = calculatePlanStatus({ ...plan, blocks });
         return {
             ...plan,
             ...planStatus,
+            totalMinutes: blocks.reduce((sum, block) => sum + block.durationMinutes, 0),
             blocks,
         };
     }
@@ -356,11 +400,18 @@ class DailyPlanService {
         const existingPlan = await this.dailyPlanRepository.findPlanByUserAndDate(resolvedUser.id, date);
         const progress = await this.dailyPlanRepository.findOrCreateProgress(resolvedUser);
         if (existingPlan) {
+            if (!planMatchesProfile(existingPlan, resolvedUser) && !planHasUserProgress(existingPlan)) {
+                const refreshedPlan = await this.dailyPlanRepository.savePlan({
+                    ...this.generatePlan(resolvedUser, date, dailyRotation(date, progress), { progress }),
+                    streak: progress.streakDays,
+                });
+                return { user: resolvedUser, dailyPlan: refreshedPlan, progress };
+            }
             const normalizedPlan = await this.persistNormalizedPlan(existingPlan);
             return { user: resolvedUser, dailyPlan: normalizedPlan, progress };
         }
         const plan = await this.dailyPlanRepository.savePlan({
-            ...this.generatePlan(resolvedUser, date, 0, { progress }),
+            ...this.generatePlan(resolvedUser, date, dailyRotation(date, progress), { progress }),
             streak: progress.streakDays,
         });
         return { user: resolvedUser, dailyPlan: plan, progress };
@@ -372,7 +423,7 @@ class DailyPlanService {
         }
         const progress = await this.dailyPlanRepository.findOrCreateProgress(user);
         const plan = await this.dailyPlanRepository.savePlan({
-            ...this.generatePlan(user, todayKey(), 0, { progress }),
+            ...this.generatePlan(user, todayKey(), dailyRotation(todayKey(), progress), { progress }),
             streak: progress.streakDays,
         });
         return { user, dailyPlan: plan, progress };

@@ -41,14 +41,17 @@ const mapSettings = (settings) => ({
 });
 const isInterfaceLanguage = (value) => value === "pt-BR" || value === "en";
 const resolveInterfaceLanguage = (current, merged, rawInput) => {
-    if (isInterfaceLanguage(rawInput.interfaceLanguage)) {
-        return rawInput.interfaceLanguage;
-    }
     if (rawInput.languageMode === "full_english") {
         return "en";
     }
     if (rawInput.languageMode === "pt_explanation_en_correction") {
         return "pt-BR";
+    }
+    if (merged.languageMode === "full_english") {
+        return "en";
+    }
+    if (isInterfaceLanguage(rawInput.interfaceLanguage)) {
+        return rawInput.interfaceLanguage;
     }
     if (isInterfaceLanguage(merged.interfaceLanguage)) {
         return merged.interfaceLanguage;
@@ -56,7 +59,7 @@ const resolveInterfaceLanguage = (current, merged, rawInput) => {
     if (isInterfaceLanguage(current.interfaceLanguage)) {
         return current.interfaceLanguage;
     }
-    return merged.languageMode === "full_english" ? "en" : "pt-BR";
+    return "pt-BR";
 };
 const coerceSettings = (userId, input, current = defaultSettings(userId), rawInput = input) => {
     const base = defaultSettings(userId);

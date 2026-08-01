@@ -4,7 +4,6 @@ import { AiRepository } from "../repositories/ai.repository";
 import { EffectiveLearningPreferences, LearningPreferencesService, defaultEffectiveLearningPreferences } from "./learningPreferences.service";
 import { PromptContextBuilder } from "./promptContext.service";
 import { SpeechAnalysisResult } from "../types/speech";
-import { validatePortugueseTranslation } from "../utils/translationValidator";
 import { ProgressService } from "./progress.service";
 import {
   SpeakingCoachStatus,
@@ -23,9 +22,9 @@ type AiMode =
   | "conversation"
   | "dev-mode"
   | "think-in-english"
-  | "vocabulary"
   | "daily-plan"
   | "speaking-coach"
+  | "review-meaning"
   | "mistake";
 
 interface PreviousMessage {
@@ -41,13 +40,6 @@ interface ConversationInput {
   goal?: string;
   conversationSessionId?: string;
   previousMessages?: PreviousMessage[];
-}
-
-interface VocabularyInput {
-  userId: string;
-  topic?: string;
-  level?: string;
-  goal?: string;
 }
 
 interface DailyPlanInput {
@@ -73,6 +65,26 @@ interface SpeakingCoachInput {
   context?: string;
   level?: string;
   requestId?: string;
+}
+
+interface ReviewMeaningInput {
+  userId: string;
+  audioBuffer: Buffer;
+  audioMimeType: string;
+  phrase: string;
+  expectedMeaning: string;
+  level?: string;
+  requestId?: string;
+}
+
+interface ReviewMeaningAnalysis {
+  status: "ok";
+  transcript: string;
+  wasCorrect: boolean;
+  score: number;
+  feedback: string;
+  expectedMeaning: string;
+  missingIdea?: string;
 }
 
 interface MistakeAnalysis {
@@ -137,16 +149,6 @@ interface SpeakingCoachAnalysis extends SpeechAnalysisResult {
   mode: "ai";
 }
 
-type VocabularyExamplesReply = {
-  topic: string;
-  level: string;
-  examples: Array<{
-    phrase: string;
-    translation?: string;
-    category?: string;
-  }>;
-};
-
 export interface AiReply {
   reply: string;
   correction?: string;
@@ -154,6 +156,13 @@ export interface AiReply {
   nextQuestion?: string;
   level?: string;
   sessionId?: string;
+  phrase?: string;
+  meaning?: string;
+  pronunciationGuide?: string;
+  nativeTip?: string;
+  shorterVersion?: string;
+  examples?: string[];
+  audioText?: string;
 }
 
 export class AiProviderError extends Error {
@@ -505,9 +514,18 @@ Objetivo: ${input.goal ?? "inglÃªs tÃ©cnico para trabalho"}
       mode: "think-in-english",
       instructions: `
 ${languageInstruction(settings)}
-Se o usuÃ¡rio pedir traduÃ§Ã£o palavra por palavra, incentive a descriÃ§Ã£o em inglÃªs primeiro.
+Voce e um professor particular de ingles para brasileiros.
+Esta tela funciona como um buscador de frases: o aluno pergunta "como se diz..." ou descreve uma ideia em portugues.
+Responda como um professor pratico:
+- Diga a forma natural em ingles, pronta para usar.
+- Explique quando usar, sem aula longa.
+- Quando houver uma versao mais nativa/curta, mostre o corte natural. Ex.: "On which street is the bakery?" pode virar "Which street is the bakery on?"
+- Diga que o audio deve ser treinado pela frase natural, nao pela traducao palavra por palavra.
+- Use portugues brasileiro nas explicacoes quando interfaceLanguage for pt-BR.
+- Mantenha frases, exemplos e suggestedPhrase em ingles.
+- Nao invente pronuncia fonetica complexa; use uma guia simples para brasileiro, com silabas aproximadas.
 Return this JSON shape:
-{"reply":"short answer in simple English","correction":"","suggestedPhrase":"useful phrase","nextQuestion":"short question","level":"A1"}
+{"reply":"explicacao curta e natural","correction":"","suggestedPhrase":"main natural English phrase","phrase":"main natural English phrase","meaning":"meaning in the user's language","pronunciationGuide":"simple pronunciation guide for Brazilian learners","nativeTip":"how to sound more natural or what to cut","shorterVersion":"shorter/native alternative or empty string","examples":["example sentence 1","example sentence 2"],"audioText":"best phrase to play as audio","nextQuestion":"short follow-up question","level":"A1"}
 `,
       userContent: JSON.stringify({
         recentHistory: storedHistory.length ? storedHistory : limitMessages(input.previousMessages),
@@ -517,39 +535,6 @@ Return this JSON shape:
 
     const session = await this.persistConversation({ ...input, mode: "think-in-english" }, reply);
     return { ...reply, sessionId: session.sessionId };
-  }
-
-  async generateVocabularyExamples(input: VocabularyInput) {
-    const settings = await this.getUserSettings(input.userId);
-    const result = await this.createJsonResponse<VocabularyExamplesReply>({
-      mode: "vocabulary",
-      instructions: `
-${languageInstruction(settings)}
-Crie vocabulÃ¡rio sempre com frases completas, nunca palavras isoladas.
-Se interfaceLanguage for "pt-BR", cada translation deve ser 100% portugues brasileiro, sem repetir a phrase em ingles e sem misturar idiomas.
-Para vocabulario de uma palavra, translation deve ser somente o significado em portugues, por exemplo "Medico.", "Problema.", "Sugerir.".
-Return this JSON shape:
-{"topic":"topic","level":"A1","examples":[{"phrase":"English phrase","translation":"complete Brazilian Portuguese translation when Portuguese support is enabled, otherwise English meaning","category":"category"}]}
-`,
-      userContent: JSON.stringify(input),
-    });
-
-    if (settings.portugueseSupportLevel === "none") {
-      return result;
-    }
-
-    return {
-      ...result,
-      examples: (result.examples ?? []).map((example) => {
-        const validation = validatePortugueseTranslation(example.phrase, example.translation);
-        return validation.valid
-          ? example
-          : {
-              ...example,
-              translation: "Tradução em português indisponível.",
-            };
-      }),
-    };
   }
 
   async generateDailyPlan(input: DailyPlanInput) {
@@ -563,6 +548,132 @@ Use os minutos disponÃ­veis sem ultrapassar o total.
 `,
       userContent: JSON.stringify(input),
     });
+  }
+
+  async analyzeReviewMeaningAttempt(input: ReviewMeaningInput): Promise<ReviewMeaningAnalysis> {
+    const settings = await this.getUserSettings(input.userId);
+    const requestId = input.requestId ?? `review-meaning-${Date.now().toString(36)}`;
+    const startedAt = Date.now();
+    let stage = "start";
+
+    if (!this.client) {
+      throw new AiProviderError("OpenAI is not configured on the backend.", 503);
+    }
+
+    try {
+      console.info("[ai:review-meaning] start", {
+        requestId,
+        stage,
+        fileSizeBytes: input.audioBuffer.length,
+        mimeType: input.audioMimeType,
+      });
+
+      stage = "normalize_audio";
+      const { wavBuffer, audioQuality } = await normalizeAndAnalyzeAudio({
+        buffer: input.audioBuffer,
+        mimeType: input.audioMimeType,
+      });
+
+      if (!audioQuality.hasSpeech || audioQuality.durationSeconds < 0.4) {
+        throw new AiProviderError("Nao consegui ouvir uma explicacao. Grave uma resposta um pouco mais clara.", 400, "no_speech");
+      }
+
+      const audioFile = await toFile(wavBuffer, `review-meaning.${speakingAudioExtension("audio/wav")}`, {
+        type: "audio/wav",
+      });
+
+      stage = "transcribe";
+      const transcription = await this.client.audio.transcriptions.create({
+        file: audioFile,
+        model: "gpt-4o-mini-transcribe",
+        language: settings.interfaceLanguage === "pt-BR" ? "pt" : "en",
+      });
+      const transcript = transcription.text?.trim() ?? "";
+
+      if (!transcript) {
+        throw new AiProviderError("Nao consegui transcrever sua explicacao. Tente gravar de novo.", 400, "no_speech");
+      }
+
+      stage = "evaluate_meaning";
+      const evaluation = await this.createJsonResponse<Omit<ReviewMeaningAnalysis, "status" | "transcript" | "expectedMeaning">>({
+        mode: "review-meaning",
+        instructions: `
+Voce avalia revisao de vocabulario por compreensao, nao por pronuncia.
+O aluno ouviu/leu uma frase em ingles e gravou uma explicacao do significado.
+Compare a explicacao transcrita com o significado esperado.
+Aceite sinonimos, parafrases naturais, ordem diferente e explicacao parcial suficiente.
+Marque errado quando a ideia principal estiver ausente, invertida ou confundida com outra frase.
+Nao exija traducao literal palavra por palavra.
+Se interfaceLanguage for "pt-BR", escreva feedback em portugues brasileiro.
+Retorne JSON valido exatamente neste formato:
+{
+  "wasCorrect": true,
+  "score": 0.82,
+  "feedback": "curto, direto e pedagogico",
+  "missingIdea": "ideia que faltou, ou string vazia"
+}
+`,
+        userContent: JSON.stringify({
+          phrase: input.phrase,
+          expectedMeaning: input.expectedMeaning,
+          learnerExplanationTranscript: transcript,
+          level: input.level ?? "A1",
+          interfaceLanguage: settings.interfaceLanguage,
+        }),
+      });
+
+      const result: ReviewMeaningAnalysis = {
+        status: "ok",
+        transcript,
+        expectedMeaning: input.expectedMeaning,
+        wasCorrect: Boolean(evaluation.wasCorrect),
+        score: Math.max(0, Math.min(1, Number(evaluation.score) || 0)),
+        feedback: evaluation.feedback || "Resposta avaliada.",
+        missingIdea: evaluation.missingIdea || "",
+      };
+
+      console.info("[ai:review-meaning] completed", {
+        requestId,
+        stage: "completed",
+        fileSizeBytes: input.audioBuffer.length,
+        mimeType: input.audioMimeType,
+        durationSeconds: audioQuality.durationSeconds,
+        score: result.score,
+        wasCorrect: result.wasCorrect,
+        processingMs: Date.now() - startedAt,
+      });
+
+      return result;
+    } catch (error) {
+      const status = typeof error === "object" && error && "status" in error ? Number(error.status) : undefined;
+      console.error("[ai:review-meaning] analysis failed", {
+        requestId,
+        stage,
+        fileSizeBytes: input.audioBuffer.length,
+        mimeType: input.audioMimeType,
+        status,
+        processingMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+      });
+
+      if (error instanceof AiProviderError) {
+        throw error;
+      }
+
+      if (status === 401) {
+        throw new AiProviderError("OpenAI API key is invalid. Update OPENAI_API_KEY and restart the backend.", 401);
+      }
+
+      if (status === 429) {
+        throw new AiProviderError("OpenAI quota or billing limit was reached. Add API billing/credits to continue.", 429);
+      }
+
+      if (error instanceof Error && error.name === "APIConnectionTimeoutError") {
+        throw new AiProviderError("OpenAI took too long to respond. Please try again.", 504);
+      }
+
+      throw error;
+    }
   }
 
   async analyzeSpeakingCoachAttempt(input: SpeakingCoachInput): Promise<SpeakingCoachAnalysis> {
@@ -655,7 +766,7 @@ For Brazilian Portuguese mode, these pedagogical fields must be in Brazilian Por
 title, whatHappened, whyItHappens, whenToUse, whenToAvoid, drill, strengths, improvements, nextMission, patterns.evidence and patterns.exercise.
 Keep only literal quoted English phrases in English, such as "want to", "wanna" and "I wanna talk about my routine.".
 In Brazilian Portuguese mode, do not write phrases like "You said", "Good rhythm", "Practice..." outside quoted examples; write them in Portuguese, like "VocÃª disse...", "Bom ritmo...", "Pratique...".
-In Brazilian Portuguese mode, do not write explanations such as "E assim que se diz doctor" as if they were translations. If teaching vocabulary, explain in Portuguese, for example: Em ingles, "doctor" significa "medico".
+In Brazilian Portuguese mode, do not write explanations such as "E assim que se diz doctor" as if they were translations. If teaching a word, explain in Portuguese, for example: Em ingles, "doctor" significa "medico".
 Return valid JSON exactly in this format:
 {
   "feedback": [

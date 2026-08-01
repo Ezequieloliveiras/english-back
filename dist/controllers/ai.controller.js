@@ -94,26 +94,6 @@ class AiController {
                 sendAiError(response, error, "AI think in English failed");
             }
         };
-        this.vocabulary = async (request, response) => {
-            try {
-                if (!request.auth?.userId)
-                    return sendSafeError(response, 401, "Authentication required");
-                const result = await this.openAiService.generateVocabularyExamples({
-                    ...request.body,
-                    userId: request.auth.userId,
-                });
-                await this.dailyPlanService?.recordBlockEvidence({
-                    userId: request.auth.userId,
-                    blockType: "vocabulary",
-                    evidenceType: "vocabulary_recall",
-                    evidenceRef: request.body.phrase ?? request.body.topic ?? "vocabulary",
-                });
-                response.json(result);
-            }
-            catch (error) {
-                sendAiError(response, error, "AI vocabulary generation failed");
-            }
-        };
         this.dailyPlan = async (request, response) => {
             try {
                 if (!request.auth?.userId)
@@ -185,6 +165,57 @@ class AiController {
                     message: error instanceof Error ? error.message : String(error),
                 });
                 sendAiError(response, error, "AI speaking coach analysis failed");
+            }
+        };
+        this.reviewMeaning = async (request, response) => {
+            const requestId = `rm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+            const startedAt = Date.now();
+            try {
+                if (!request.auth?.userId)
+                    return sendSafeError(response, 401, "Authentication required");
+                const { phrase, expectedMeaning, level } = request.body;
+                if (!phrase?.trim()) {
+                    sendSafeError(response, 400, "phrase is required");
+                    return;
+                }
+                if (!expectedMeaning?.trim()) {
+                    sendSafeError(response, 400, "expectedMeaning is required");
+                    return;
+                }
+                if (!request.file?.buffer?.length) {
+                    sendSafeError(response, 400, "audio file is required");
+                    return;
+                }
+                console.info("[ai:review-meaning] upload accepted", {
+                    requestId,
+                    stage: "upload",
+                    fileSizeBytes: request.file.size,
+                    mimeType: request.file.mimetype,
+                });
+                const result = await this.openAiService.analyzeReviewMeaningAttempt({
+                    userId: request.auth.userId,
+                    audioBuffer: request.file.buffer,
+                    audioMimeType: request.file.mimetype,
+                    phrase: phrase.trim(),
+                    expectedMeaning: expectedMeaning.trim(),
+                    level,
+                    requestId,
+                });
+                console.info("[ai:review-meaning] response sent", {
+                    requestId,
+                    stage: "response",
+                    processingMs: Date.now() - startedAt,
+                });
+                response.json(result);
+            }
+            catch (error) {
+                console.error("[ai:review-meaning] request failed", {
+                    requestId,
+                    stage: "controller",
+                    processingMs: Date.now() - startedAt,
+                    message: error instanceof Error ? error.message : String(error),
+                });
+                sendAiError(response, error, "AI review meaning analysis failed");
             }
         };
         this.analyzeMistake = async (request, response) => {

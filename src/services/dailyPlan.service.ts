@@ -33,7 +33,7 @@ const blockTemplates: Record<StudyBlockType, Omit<StudyBlock, "id" | "durationMi
     objective: "Understand short, comprehensible dialogues without translating every word.",
   },
   vocabulary: {
-    title: "Vocabulary",
+    title: "Review",
     type: "vocabulary",
     objective: "Review complete sentences you can reuse in real situations.",
   },
@@ -164,24 +164,24 @@ const calculatePlanStatus = (plan: DailyPlan): Pick<DailyPlan, "status" | "compl
 const baseWeights: Record<StudyBlockType, number> = {
   shadowing: 0.22,
   "speaking-coach": 0.16,
-  listening: 0.2,
-  vocabulary: 0.13,
-  conversation: 0.21,
-  review: 0.08,
+  listening: 0.22,
+  vocabulary: 0,
+  conversation: 0.24,
+  review: 0.16,
 };
 
 const difficultyBoost: Record<UserProfile["mainDifficulty"], Partial<Record<StudyBlockType, number>>> = {
-  speaking: { conversation: 0.1, "speaking-coach": 0.08, shadowing: 0.05, listening: -0.04, vocabulary: -0.03 },
-  listening: { listening: 0.14, shadowing: 0.03, conversation: -0.04, vocabulary: -0.03 },
-  vocabulary: { vocabulary: 0.14, review: 0.05, conversation: -0.04, shadowing: -0.03 },
-  pronunciation: { "speaking-coach": 0.12, shadowing: 0.1, conversation: 0.04, vocabulary: -0.04, review: -0.02 },
+  speaking: { conversation: 0.1, "speaking-coach": 0.08, shadowing: 0.05, listening: -0.04 },
+  listening: { listening: 0.14, shadowing: 0.03, conversation: -0.04 },
+  vocabulary: { review: 0.12, listening: 0.04 },
+  pronunciation: { "speaking-coach": 0.12, shadowing: 0.1, conversation: 0.04, review: -0.02 },
 };
 
 const levelBoost: Partial<Record<EnglishLevel, Partial<Record<StudyBlockType, number>>>> = {
-  A1: { listening: 0.07, vocabulary: 0.05, conversation: -0.05 },
+  A1: { listening: 0.07, review: 0.05, conversation: -0.05 },
   A2: { shadowing: 0.04, "speaking-coach": 0.03, conversation: 0.03 },
   B1: { conversation: 0.07, review: 0.02, listening: -0.03 },
-  B2: { conversation: 0.1, review: 0.03, vocabulary: -0.04 },
+  B2: { conversation: 0.1, review: 0.03 },
   C1: { conversation: 0.12, review: 0.04, listening: -0.04 },
 };
 
@@ -191,7 +191,7 @@ const normalizeLevel = (level: string): EnglishLevel => {
 };
 
 const normalizeDifficulty = (difficulty: string): UserProfile["mainDifficulty"] => {
-  if (["listening", "speaking", "vocabulary", "pronunciation"].includes(difficulty)) {
+  if (["listening", "speaking", "pronunciation"].includes(difficulty)) {
     return difficulty as UserProfile["mainDifficulty"];
   }
 
@@ -206,7 +206,7 @@ const goalBoost = (goal: string): Partial<Record<StudyBlockType, number>> => {
   }
 
   if (normalized.includes("listen") || normalized.includes("understand")) {
-    return { listening: 0.08, vocabulary: 0.02 };
+    return { listening: 0.08, review: 0.02 };
   }
 
   if (normalized.includes("interview") || normalized.includes("job")) {
@@ -214,7 +214,7 @@ const goalBoost = (goal: string): Partial<Record<StudyBlockType, number>> => {
   }
 
   if (normalized.includes("developer") || normalized.includes("technical") || normalized.includes("work")) {
-    return { conversation: 0.05, vocabulary: 0.04, review: 0.02 };
+    return { conversation: 0.05, review: 0.05 };
   }
 
   return {};
@@ -227,10 +227,9 @@ const professionBoost = (profile: UserProfile): Partial<Record<StudyBlockType, n
 
   return {
     conversation: 0.08,
-    vocabulary: 0.06,
     listening: 0.04,
     shadowing: 0.03,
-    review: 0.02,
+    review: 0.06,
   };
 };
 
@@ -265,7 +264,7 @@ const buildFocus = (profile: UserProfile) => {
   const focusByDifficulty: Record<UserProfile["mainDifficulty"], string> = {
     speaking: "Build speaking confidence with short, realistic conversations.",
     listening: "Train your ear with short, comprehensible input before output.",
-    vocabulary: "Turn sentence mining into phrases you can reuse today.",
+    vocabulary: "Strengthen recall with complete phrases you can reuse today.",
     pronunciation: "Improve clarity with shadowing and controlled repetition.",
   };
 
@@ -320,7 +319,7 @@ const dailyRotation = (date: string, progress?: ProgressSnapshot) =>
   numericDateSeed(date) + (progress?.completedPlans ?? 0) + (progress?.streakDays ?? 0);
 
 const distributeMinutes = (totalMinutes: number, weights: Record<StudyBlockType, number>) => {
-  const blockTypes = Object.keys(weights) as StudyBlockType[];
+  const blockTypes = (Object.keys(weights) as StudyBlockType[]).filter((type) => type !== "vocabulary");
   const safeTotal = Math.max(10, Math.min(120, Math.round(totalMinutes)));
   const normalizedTotal = blockTypes.reduce((sum, type) => sum + Math.max(0.04, weights[type]), 0);
   const preferredMinimum = safeTotal < 20 ? 3 : 4;
@@ -387,7 +386,7 @@ const weakestSkillBoost = (progress?: ProgressSnapshot): {
   const scores = [
     { skill: "listening", score: progress.listeningScore, boost: { listening: 0.08, shadowing: 0.03 } },
     { skill: "speaking", score: progress.speakingScore, boost: { conversation: 0.07, "speaking-coach": 0.04 } },
-    { skill: "vocabulary", score: progress.vocabularyScore, boost: { vocabulary: 0.08, review: 0.04 } },
+    { skill: "review", score: progress.vocabularyScore, boost: { review: 0.1, listening: 0.02 } },
     { skill: "pronunciation", score: progress.pronunciationScore, boost: { "speaking-coach": 0.08, shadowing: 0.05 } },
   ] as const;
   const meaningful = scores.filter((entry) => entry.score > 0);
@@ -470,12 +469,15 @@ export class DailyPlanService {
   }
 
   private normalizePlan(plan: DailyPlan) {
-    const blocks = plan.blocks.map((block) => calculateBlockProgress(block));
+    const blocks = plan.blocks
+      .filter((block) => block.type !== "vocabulary")
+      .map((block) => calculateBlockProgress(block));
     const planStatus = calculatePlanStatus({ ...plan, blocks });
 
     return {
       ...plan,
       ...planStatus,
+      totalMinutes: blocks.reduce((sum, block) => sum + block.durationMinutes, 0),
       blocks,
     };
   }

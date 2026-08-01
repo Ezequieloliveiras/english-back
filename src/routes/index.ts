@@ -86,9 +86,9 @@ export const buildRouter = (
   router.post("/ai/conversation", requireAuth, aiController.conversation);
   router.post("/ai/dev-mode", requireAuth, aiController.devMode);
   router.post("/ai/think-in-english", requireAuth, aiController.thinkInEnglish);
-  router.post("/ai/vocabulary", requireAuth, aiController.vocabulary);
   router.post("/ai/daily-plan", requireAuth, aiController.dailyPlan);
   router.post("/ai/speaking-coach", requireAuth, handleSpeakingCoachUpload, aiController.speakingCoach);
+  router.post("/ai/review-meaning", requireAuth, handleSpeakingCoachUpload, aiController.reviewMeaning);
   router.post("/ai/analyze-mistake", requireAuth, aiController.analyzeMistake);
   router.post("/practice/complete", requireAuth, practiceController.complete);
   router.post("/practice/listening-attempts", requireAuth, practiceController.listeningAttempt);

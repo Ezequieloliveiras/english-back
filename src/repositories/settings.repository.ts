@@ -89,16 +89,20 @@ const resolveInterfaceLanguage = (
   merged: Partial<UserSettings>,
   rawInput: Partial<UserSettings>
 ): UserSettings["interfaceLanguage"] => {
-  if (isInterfaceLanguage(rawInput.interfaceLanguage)) {
-    return rawInput.interfaceLanguage;
-  }
-
   if (rawInput.languageMode === "full_english") {
     return "en";
   }
 
   if (rawInput.languageMode === "pt_explanation_en_correction") {
     return "pt-BR";
+  }
+
+  if (merged.languageMode === "full_english") {
+    return "en";
+  }
+
+  if (isInterfaceLanguage(rawInput.interfaceLanguage)) {
+    return rawInput.interfaceLanguage;
   }
 
   if (isInterfaceLanguage(merged.interfaceLanguage)) {
@@ -109,7 +113,7 @@ const resolveInterfaceLanguage = (
     return current.interfaceLanguage;
   }
 
-  return merged.languageMode === "full_english" ? "en" : "pt-BR";
+  return "pt-BR";
 };
 
 const coerceSettings = (

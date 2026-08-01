@@ -444,12 +444,12 @@ exports.dashboardSeed = {
             },
             {
                 id: "b3",
-                title: "Vocabulary",
-                type: "vocabulary",
+                title: "Review",
+                type: "review",
                 durationMinutes: 5,
                 status: "pending",
                 progress: 0,
-                objective: "Mine full sentences you can reuse today.",
+                objective: "Review weak phrases scheduled by spaced repetition.",
             },
             {
                 id: "b4",

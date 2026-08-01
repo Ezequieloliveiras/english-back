@@ -53,11 +53,15 @@ const validVoices: Array<UserSettings["preferredVoice"]> = [
 ];
 
 const resolveInterfaceLanguage = (settings: Partial<UserSettings>): InterfaceLanguage => {
+  if (settings.languageMode === "full_english") {
+    return "en";
+  }
+
   if (settings.interfaceLanguage === "en" || settings.interfaceLanguage === "pt-BR") {
     return settings.interfaceLanguage;
   }
 
-  return settings.languageMode === "full_english" ? "en" : "pt-BR";
+  return "pt-BR";
 };
 
 const resolvePortugueseSupportLevel = (mode?: UserSettings["supportLanguageMode"]): PortugueseSupportLevel => {

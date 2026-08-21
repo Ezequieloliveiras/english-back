@@ -584,7 +584,7 @@ Required JSON: {"dailyObjective":"short","pedagogicalFocus":["skill"],"activitie
     const moduleInstructions: Record<string, string> = {
       listening: "Return title, dialogue as speaker-prefixed strings, transcript, and questions [{prompt,answer,acceptableAnswers,explanation}].",
       vocabulary: "Return items [{phrase,translation,example,usageNote}] and no dialogue.",
-      shadowing: "Return text, translation, pronunciationTip, rhythmNote and no questions.",
+      shadowing: "Return items with 3 short, connected phrases: [{text,translation,pronunciationTip,rhythmNote}]. Keep all phrases in the persisted semantic context and return no questions.",
       pronunciation: "Return phrase, translation, phoneticFocus {target,tip}, pronunciationTip and no dialogue.",
       conversation: "Return openingMessage, assistantRole, studentRole, studentGoal, targetStructures and successCriteria.",
       "think-in-english": "Return situation, userMessage, coachReply, hints and expectedStructures.",

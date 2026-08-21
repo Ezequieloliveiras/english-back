@@ -119,7 +119,7 @@ class AiController {
             try {
                 if (!request.auth?.userId)
                     return sendSafeError(response, 401, "Authentication required");
-                const { targetPhrase, focus, context, level } = request.body;
+                const { targetPhrase, focus, context, level, activityId } = request.body;
                 if (!targetPhrase?.trim()) {
                     sendSafeError(response, 400, "targetPhrase is required");
                     return;
@@ -150,6 +150,9 @@ class AiController {
                     evidenceType: "pronunciation_analysis",
                     evidenceRef: targetPhrase.trim(),
                 });
+                if (typeof activityId === "string" && activityId.trim()) {
+                    await this.dailyPlanService?.markAiActivityCompleted(request.auth.userId, activityId.trim(), "pronunciation");
+                }
                 console.info("[ai:speaking-coach] response sent", {
                     requestId,
                     stage: "response",

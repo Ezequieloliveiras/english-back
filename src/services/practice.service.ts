@@ -69,6 +69,9 @@ export class PracticeService {
         evidenceType: evidence.evidenceType,
         evidenceRef: input.itemId,
       });
+      if (this.dailyPlanService && typeof (this.dailyPlanService as any).markAiActivityCompleted === "function") {
+        await (this.dailyPlanService as any).markAiActivityCompleted(input.userId, input.itemId, input.type);
+      }
     }
 
     return {

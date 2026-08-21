@@ -48,6 +48,9 @@ class PracticeService {
                 evidenceType: evidence.evidenceType,
                 evidenceRef: input.itemId,
             });
+            if (this.dailyPlanService && typeof this.dailyPlanService.markAiActivityCompleted === "function") {
+                await this.dailyPlanService.markAiActivityCompleted(input.userId, input.itemId, input.type);
+            }
         }
         return {
             status: 200,

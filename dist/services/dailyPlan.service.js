@@ -438,6 +438,20 @@ class DailyPlanService {
     async saveAiBlueprint(plan, blueprint) {
         return (await this.dailyPlanRepository.updateAiBlueprint(plan.id, blueprint)) ?? { ...plan, aiBlueprint: blueprint };
     }
+    async markAiActivityCompleted(userId, itemId, practiceType) {
+        const { dailyPlan } = await this.createOrGetTodayPlan(userId);
+        const blueprint = dailyPlan.aiBlueprint;
+        if (!blueprint)
+            return dailyPlan;
+        const module = practiceType === "speaking-coach" || practiceType === "pronunciation" ? "pronunciation" : practiceType;
+        const activity = blueprint.activities.find((entry) => entry.module === module && (itemId === entry.id || itemId.startsWith(`${entry.id}-`)));
+        if (!activity || activity.status === "completed")
+            return dailyPlan;
+        const next = structuredClone(blueprint);
+        const target = next.activities.find((entry) => entry.id === activity.id);
+        target.status = "completed";
+        return this.saveAiBlueprint(dailyPlan, next);
+    }
     async advanceTodayPlan(userId) {
         const resolvedUser = await this.dailyPlanRepository.findUserById(userId);
         if (!resolvedUser) {

@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OpenAiService = exports.AiProviderError = void 0;
+exports.OpenAiService = exports.AI_PROMPT_VERSIONS = exports.AiProviderError = void 0;
 const openai_1 = __importStar(require("openai"));
 const env_1 = require("../config/env");
 const learningPreferences_service_1 = require("./learningPreferences.service");
@@ -64,6 +64,7 @@ Use frases naturais do dia a dia.
 Quando o modo for desenvolvedor, use contexto de programaÃ§Ã£o, APIs, bugs, deploy, banco de dados, frontend, backend e reuniÃµes tÃ©cnicas.
 Retorne sempre JSON vÃ¡lido, sem markdown.
 `;
+exports.AI_PROMPT_VERSIONS = { dailyPlanner: "daily-plan-v1" };
 const developerContexts = `
 Developer prompts:
 - explicar bug
@@ -333,6 +334,52 @@ Use os minutos disponÃ­veis sem ultrapassar o total.
 `,
             userContent: JSON.stringify(input),
         });
+    }
+    async generateAdaptiveDailyPlan(state) {
+        if (!this.client)
+            throw new AiProviderError("OpenAI is not configured on the backend.", 503);
+        const startedAt = Date.now();
+        const prompt = `You are the adaptive pedagogical engine for English OS. Return JSON only. Do not reveal reasoning.
+NEW means substantially new semantic context. REVIEW requires an item in dueReviews. REINFORCEMENT requires a real weak pattern or low score.
+Create 3 to 6 activities. At most 2 per module. Avoid semantic paraphrases from recentSemanticHistory.
+Required JSON: {"dailyObjective":"short","pedagogicalFocus":["skill"],"activities":[{"id":"short-id","module":"vocabulary|listening|shadowing|pronunciation|conversation|think-in-english","contentMode":"new|review|reinforcement","level":"A1|A2|B1|B2|C1","semantic":{"topic":"","subtopic":"","scenario":"","communicativeGoal":"","setting":"","participants":[],"keywords":[]},"focus":"short","reason":"short","status":"planned"}]}`;
+        const response = await this.client.responses.create({
+            model: env_1.env.openAiPlannerModel,
+            input: [{ role: "system", content: `${basePrompt}\n${prompt}` }, { role: "user", content: JSON.stringify(state) }],
+            text: { format: { type: "json_object" } },
+        });
+        const raw = parseJson(response.output_text);
+        return {
+            ...raw,
+            generationSource: "openai",
+            generationMetadata: {
+                provider: "openai", model: env_1.env.openAiPlannerModel, promptVersion: exports.AI_PROMPT_VERSIONS.dailyPlanner, attempt: 1,
+                latencyMs: Date.now() - startedAt,
+                tokenUsage: { input: Number(response.usage?.input_tokens ?? 0), output: Number(response.usage?.output_tokens ?? 0), total: Number(response.usage?.total_tokens ?? 0) },
+            },
+        };
+    }
+    async generateBlueprintActivity(input) {
+        if (!this.client)
+            throw new AiProviderError("OpenAI is not configured on the backend.", 503);
+        const startedAt = Date.now();
+        const moduleInstructions = {
+            listening: "Return title, dialogue as speaker-prefixed strings, transcript, and questions [{prompt,answer,acceptableAnswers,explanation}].",
+            vocabulary: "Return items [{phrase,translation,example,usageNote}] and no dialogue.",
+            shadowing: "Return text, translation, pronunciationTip, rhythmNote and no questions.",
+            pronunciation: "Return phrase, translation, phoneticFocus {target,tip}, pronunciationTip and no dialogue.",
+            conversation: "Return openingMessage, assistantRole, studentRole, studentGoal, targetStructures and successCriteria.",
+            "think-in-english": "Return situation, userMessage, coachReply, hints and expectedStructures.",
+        };
+        const response = await this.client.responses.create({
+            model: env_1.env.openAiContentModel,
+            input: [{ role: "system", content: `${basePrompt}\nYou generate one English-learning activity. Follow the supplied blueprint exactly; never change its topic, subtopic, scenario, communicative goal, setting or participants. Return JSON only. Include semantic metadata identical to the blueprint. ${moduleInstructions[input.activity.module]}` }, { role: "user", content: JSON.stringify(input) }],
+            text: { format: { type: "json_object" } },
+        });
+        return {
+            content: parseJson(response.output_text),
+            metadata: { provider: "openai", model: env_1.env.openAiContentModel, promptVersion: `${input.activity.module}-v1`, attempt: 1, latencyMs: Date.now() - startedAt, tokenUsage: { input: Number(response.usage?.input_tokens ?? 0), output: Number(response.usage?.output_tokens ?? 0), total: Number(response.usage?.total_tokens ?? 0) } },
+        };
     }
     async analyzeReviewMeaningAttempt(input) {
         const settings = await this.getUserSettings(input.userId);

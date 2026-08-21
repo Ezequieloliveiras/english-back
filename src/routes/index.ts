@@ -81,6 +81,7 @@ export const buildRouter = (
   router.patch("/profile", requireAuth, profilePlanController.updateProfile);
   router.post("/profile/plan", requireAuth, profilePlanController.createPlan);
   router.get("/daily-plans/today", requireAuth, dailyPlanController.getToday);
+  router.get("/daily-plans/today/activities/:activityId", requireAuth, dailyPlanController.getActivity);
   router.post("/daily-plans/today/advance", requireAuth, dailyPlanController.advanceToday);
   router.patch("/daily-plans/blocks/complete", requireAuth, dailyPlanController.completeBlock);
   router.post("/ai/conversation", requireAuth, aiController.conversation);

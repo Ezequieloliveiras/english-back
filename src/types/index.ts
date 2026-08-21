@@ -1,4 +1,15 @@
 export type EnglishLevel = "A1" | "A2" | "B1" | "B2" | "C1";
+export type ContentMode = "new" | "review" | "reinforcement" | "fallback";
+
+export interface ContentSemanticMetadata {
+  topic: string;
+  subtopic: string;
+  scenario: string;
+  communicativeGoal: string;
+  setting?: string;
+  participants?: string[];
+  keywords: string[];
+}
 
 export type StudyBlockType =
   | "shadowing"
@@ -56,6 +67,29 @@ export interface DailyPlan {
   generationMethod?: "heuristic" | "ai" | "hybrid";
   generationReason?: string;
   blocks: StudyBlock[];
+  aiBlueprint?: AiDailyPlanBlueprint | null;
+}
+
+export type AiActivityModule = "vocabulary" | "listening" | "shadowing" | "pronunciation" | "conversation" | "think-in-english";
+export type AiActivityStatus = "planned" | "generating" | "ready" | "failed" | "completed";
+export interface AiDailyPlanActivity {
+  id: string;
+  module: AiActivityModule;
+  contentMode: Exclude<ContentMode, "fallback">;
+  level: EnglishLevel;
+  semantic: ContentSemanticMetadata;
+  focus: string;
+  reason: string;
+  status: AiActivityStatus;
+  generatedContent?: unknown;
+  generationMetadata?: { provider: "openai" | "local"; model?: string; promptVersion: string; attempt: number; latencyMs?: number; tokenUsage?: { input: number; output: number; total: number } };
+}
+export interface AiDailyPlanBlueprint {
+  dailyObjective: string;
+  pedagogicalFocus: string[];
+  activities: AiDailyPlanActivity[];
+  generationSource: "openai" | "local";
+  generationMetadata: { provider: "openai" | "local"; model?: string; promptVersion: string; attempt: number; latencyMs?: number; tokenUsage?: { input: number; output: number; total: number } };
 }
 
 export interface UserGoal {
@@ -176,6 +210,9 @@ export interface VocabularyItem {
   timesPracticed?: number;
   timesCorrect?: number;
   timesWrong?: number;
+  /** Why this item was selected for the current daily content. */
+  contentMode?: ContentMode;
+  semantic?: ContentSemanticMetadata;
 }
 
 export interface ListeningQuestion {
@@ -223,6 +260,8 @@ export interface ListeningLesson {
   dialogue: string[];
   questions: ListeningQuestion[];
   comprehension?: ComprehensiblePhraseDetails[];
+  contentMode?: ContentMode;
+  semantic?: ContentSemanticMetadata;
 }
 
 export interface ShadowingItem {
@@ -243,6 +282,8 @@ export interface ShadowingItem {
   }>;
   additionalExample?: string;
   slowPrompt?: string;
+  contentMode?: ContentMode;
+  semantic?: ContentSemanticMetadata;
 }
 
 export interface ConversationMode {
@@ -251,6 +292,8 @@ export interface ConversationMode {
   description: string;
   audience: "general" | "developer";
   starter: string;
+  contentMode?: ContentMode;
+  semantic?: ContentSemanticMetadata;
 }
 
 export interface ConversationMessage {
@@ -270,6 +313,8 @@ export interface ThinkInEnglishPrompt {
   id: string;
   userMessage: string;
   coachReply: string;
+  contentMode?: ContentMode;
+  semantic?: ContentSemanticMetadata;
 }
 
 export interface DashboardPayload {

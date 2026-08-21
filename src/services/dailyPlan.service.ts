@@ -552,6 +552,10 @@ export class DailyPlanService {
     return user;
   }
 
+  async saveAiBlueprint(plan: DailyPlan, blueprint: NonNullable<DailyPlan["aiBlueprint"]>) {
+    return (await this.dailyPlanRepository.updateAiBlueprint(plan.id, blueprint)) ?? { ...plan, aiBlueprint: blueprint };
+  }
+
   async advanceTodayPlan(userId: string) {
     const resolvedUser = await this.dailyPlanRepository.findUserById(userId);
 

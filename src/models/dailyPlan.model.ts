@@ -48,6 +48,7 @@ const dailyPlanSchema = new Schema(
       enum: ["heuristic", "ai", "hybrid"],
     },
     generationReason: { type: String, required: true, default: "Generated from profile level, goal, difficulty, profession and available minutes." },
+    aiBlueprint: { type: Schema.Types.Mixed, default: null },
     blocks: { type: [studyBlockSchema], required: true },
   },
   { timestamps: true }

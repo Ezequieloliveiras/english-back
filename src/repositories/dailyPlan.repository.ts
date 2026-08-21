@@ -52,6 +52,7 @@ const mapPlan = (plan: any): DailyPlan => ({
   completedAt: plan.completedAt ?? null,
   generationMethod: plan.generationMethod ?? "heuristic",
   generationReason: plan.generationReason ?? "Generated from profile level, goal, difficulty, profession and available minutes.",
+  aiBlueprint: plan.aiBlueprint ?? null,
   blocks: plan.blocks.map(mapBlock),
 });
 
@@ -197,6 +198,7 @@ export class DailyPlanRepository {
           completedAt: plan.completedAt ?? null,
           generationMethod: plan.generationMethod ?? "heuristic",
           generationReason: plan.generationReason ?? "Generated from profile level, goal, difficulty, profession and available minutes.",
+          aiBlueprint: plan.aiBlueprint ?? null,
           blocks: plan.blocks,
         },
       },
@@ -218,6 +220,18 @@ export class DailyPlanRepository {
       { new: true }
     );
 
+    return updated ? mapPlan(updated) : null;
+  }
+
+  async updateAiBlueprint(planId: string, blueprint: DailyPlan["aiBlueprint"]) {
+    if (!isDatabaseReady()) {
+      const plan = [...memoryState.plans.values()].find((entry) => entry.id === planId);
+      if (!plan) return null;
+      const updated = { ...plan, aiBlueprint: blueprint ?? null };
+      memoryState.plans.set(`${updated.userId}:${updated.date}`, updated);
+      return updated;
+    }
+    const updated = await DailyPlanModel.findByIdAndUpdate(planId, { $set: { aiBlueprint: blueprint ?? null } }, { new: true });
     return updated ? mapPlan(updated) : null;
   }
 

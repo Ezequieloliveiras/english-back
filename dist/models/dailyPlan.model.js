@@ -41,6 +41,7 @@ const dailyPlanSchema = new mongoose_1.Schema({
         enum: ["heuristic", "ai", "hybrid"],
     },
     generationReason: { type: String, required: true, default: "Generated from profile level, goal, difficulty, profession and available minutes." },
+    aiBlueprint: { type: mongoose_1.Schema.Types.Mixed, default: null },
     blocks: { type: [studyBlockSchema], required: true },
 }, { timestamps: true });
 exports.DailyPlanModel = (0, mongoose_1.model)("DailyPlan", dailyPlanSchema);

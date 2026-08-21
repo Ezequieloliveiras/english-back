@@ -34,6 +34,9 @@ import { OpenAiService } from "./services/openai.service";
 import { LearningPreferencesService } from "./services/learningPreferences.service";
 import { PracticeService } from "./services/practice.service";
 import { ProgressService } from "./services/progress.service";
+import { LearningStateService } from "./services/learningState.service";
+import { DailyAiPlannerService } from "./services/dailyAiPlanner.service";
+import { AiActivityGenerationService } from "./services/aiActivityGeneration.service";
 import { ProfilePlanService } from "./services/profilePlan.service";
 import { ReviewService } from "./services/review.service";
 import { SettingsService } from "./services/settings.service";
@@ -59,6 +62,8 @@ const audioService = new AudioService(
 const authService = new AuthService(authRepository);
 const progressService = new ProgressService(progressRepository);
 const openAiService = new OpenAiService(aiRepository, learningPreferencesService, progressService);
+const learningStateService = new LearningStateService();
+const dailyAiPlannerService = new DailyAiPlannerService(openAiService);
 const dailyPlanService = new DailyPlanService(dailyPlanRepository, progressService);
 const conversationService = new ConversationService(openAiService, dailyPlanService);
 const reviewService = new ReviewService(contentRepository, dailyPlanService, progressService);
@@ -69,7 +74,9 @@ const contentService = new ContentService(
   aiRepository,
   practiceRepository,
   progressService,
-  userGoalRepository
+  userGoalRepository,
+  learningStateService,
+  dailyAiPlannerService
 );
 
 const profilePlanService = new ProfilePlanService(dailyPlanService, userGoalRepository);
@@ -85,7 +92,8 @@ const reviewController = new ReviewController(reviewService);
 const profilePlanController = new ProfilePlanController(
   profilePlanService
 );
-const dailyPlanController = new DailyPlanController(dailyPlanService);
+const activityGenerationService = new AiActivityGenerationService(dailyPlanService, openAiService);
+const dailyPlanController = new DailyPlanController(dailyPlanService, activityGenerationService);
 const aiController = new AiController(openAiService, dailyPlanService);
 const practiceController = new PracticeController(practiceService);
 const settingsController = new SettingsController(settingsService);
@@ -180,5 +188,3 @@ app.use(
     settingsController
   )
 )
-
-

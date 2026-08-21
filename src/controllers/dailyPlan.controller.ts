@@ -1,9 +1,10 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { DailyPlanService } from "../services/dailyPlan.service";
+import { AiActivityGenerationService } from "../services/aiActivityGeneration.service";
 
 export class DailyPlanController {
-  constructor(private readonly dailyPlanService: DailyPlanService) {}
+  constructor(private readonly dailyPlanService: DailyPlanService, private readonly activityGenerationService?: AiActivityGenerationService) {}
 
   getToday = async (request: AuthenticatedRequest, response: Response) => {
     if (!request.auth?.userId) {
@@ -44,5 +45,22 @@ export class DailyPlanController {
     const result = await this.dailyPlanService.completeBlock(planId, blockId, request.auth.userId);
 
     response.status(result.status).json(result.body);
+  };
+
+  getActivity = async (request: AuthenticatedRequest, response: Response) => {
+    if (!request.auth?.userId) {
+      response.status(401).json({ message: "Authentication required" });
+      return;
+    }
+    if (!this.activityGenerationService) {
+      response.status(503).json({ message: "AI activity generation is unavailable" });
+      return;
+    }
+    try {
+      const { dailyPlan } = await this.dailyPlanService.createOrGetTodayPlan(request.auth.userId);
+      response.json(await this.activityGenerationService.getOrGenerate(dailyPlan, String(request.params.activityId)));
+    } catch (error) {
+      response.status(404).json({ message: error instanceof Error ? error.message : "Activity not found" });
+    }
   };
 }

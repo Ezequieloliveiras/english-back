@@ -1,10 +1,13 @@
 import mongoose from "mongoose";
 import { dashboardSeed } from "../data/seedData";
 import { ContentCatalogModel } from "../models/contentCatalog.model";
+import { ContentExposureModel } from "../models/contentExposure.model";
 import { ReviewScheduleModel } from "../models/reviewSchedule.model";
 import { VocabularyItemModel } from "../models/vocabularyItem.model";
 import {
   ConversationMode,
+  ContentMode,
+  ContentSemanticMetadata,
   DailyPlan,
   EnglishLevel,
   ListeningLesson,
@@ -14,6 +17,7 @@ import {
   UserProfile,
   VocabularyItem,
 } from "../types";
+import { DailyContentModule, SemanticContext, selectSemanticContext, semanticFingerprint } from "../services/contentDiversity.service";
 import { normalizeShadowingItem } from "../utils/trainingPhrase";
 
 type LearningContent = {
@@ -30,6 +34,7 @@ type CompletedActivitySummary = {
   itemId: string;
   title: string;
   completedAt: string;
+  semantic?: ContentSemanticMetadata;
 };
 
 type ListeningAttemptSummary = {
@@ -62,6 +67,7 @@ type PersonalizationHistory = {
   listeningAttempts?: ListeningAttemptSummary[];
   recentSpeakingAttempts?: SpeakingAttemptSummary[];
   dueReviewItems?: VocabularyItem[];
+  presentedContent?: CompletedActivitySummary[];
 };
 
 type TeacherMemory = {
@@ -127,6 +133,97 @@ const normalizeContentKey = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+export const contentFingerprint = (type: string, text: string) =>
+  `${type}:${normalizeContentKey(text)}`;
+
+type EligibleItem<T> = {
+  item: T;
+  id: string;
+  text: string;
+  aliases?: string[];
+};
+
+type EligibilityHistory = PersonalizationHistory;
+
+const normalizedActivityTypes = (type: string) => {
+  if (type === "shadowing" || type === "repetition") return new Set(["shadowing", "repetition"]);
+  if (type === "conversation") return new Set(["conversation", "think-in-english", "developer-mode"]);
+  return new Set([type]);
+};
+
+/**
+ * The single selection policy used by every daily-content catalog.  It never
+ * treats a known item as new: new items come first, then pedagogical repeats,
+ * then the oldest known content as a controlled fallback.
+ */
+const orderByEligibility = <T>(
+  type: string,
+  candidates: EligibleItem<T>[],
+  history: EligibilityHistory,
+  seed: number,
+  options: { isReinforcement?: (candidate: EligibleItem<T>) => boolean } = {}
+) => {
+  const acceptedTypes = normalizedActivityTypes(type);
+  const seen = [...(history.completedActivities ?? []), ...(history.presentedContent ?? [])]
+    .filter((activity) => acceptedTypes.has(activity.type));
+  const due = history.dueReviewItems ?? [];
+  const listeningAttempts = history.listeningAttempts ?? [];
+  const seenFor = (candidate: EligibleItem<T>) => {
+    const keys = new Set([candidate.id, contentFingerprint(type, candidate.text), ...(candidate.aliases ?? [])]);
+    return seen
+      .filter((activity) => keys.has(activity.itemId) || keys.has(contentFingerprint(type, activity.title)))
+      .sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt))[0];
+  };
+  const isDue = (candidate: EligibleItem<T>) =>
+    type === "vocabulary" && due.some((item) =>
+      item.id === candidate.id || normalizeContentKey(item.phrase) === normalizeContentKey(candidate.text)
+    );
+  const needsListeningReinforcement = (candidate: EligibleItem<T>) =>
+    type === "listening" && listeningAttempts.some((attempt) => {
+      const keys = new Set([candidate.id, ...candidate.aliases ?? []]);
+      const attempted = normalizeContentKey(attempt.expectedText ?? "");
+      return (
+        keys.has(attempt.exerciseId) ||
+        (attempted.length > 0 && candidate.aliases?.some((alias) => alias.endsWith(`:${attempted}`)))
+      ) && (!attempt.comprehensionCorrect || (attempt.replayCount ?? 0) >= 3 || (attempt.unknownWords?.length ?? 0) > 0);
+    });
+
+  const groups: Record<ContentMode, Array<{ candidate: EligibleItem<T>; lastSeen?: string }>> = {
+    new: [], review: [], reinforcement: [], fallback: [],
+  };
+  for (const candidate of candidates) {
+    const previous = seenFor(candidate);
+    const reinforcement = options.isReinforcement?.(candidate) || needsListeningReinforcement(candidate);
+    if (!previous) groups.new.push({ candidate });
+    else if (isDue(candidate)) groups.review.push({ candidate, lastSeen: previous.completedAt });
+    else if (reinforcement) groups.reinforcement.push({ candidate, lastSeen: previous.completedAt });
+    else groups.fallback.push({ candidate, lastSeen: previous.completedAt });
+  }
+  const rotateGroup = <V,>(items: V[]) => rotateItems(items, seed);
+  const fallback = [...groups.fallback].sort((a, b) => {
+    const aTime = Date.parse(a.lastSeen ?? "") || 0;
+    const bTime = Date.parse(b.lastSeen ?? "") || 0;
+    // Older content is a safer fallback than a recent completion.
+    const recency = aTime - bTime;
+    return recency || 0;
+  });
+  return [
+    ...rotateGroup(groups.new).map(({ candidate }) => ({ ...candidate.item, contentMode: "new" as const })),
+    ...rotateGroup(groups.review).map(({ candidate }) => ({ ...candidate.item, contentMode: "review" as const })),
+    ...rotateGroup(groups.reinforcement).map(({ candidate }) => ({ ...candidate.item, contentMode: "reinforcement" as const })),
+    ...fallback.map(({ candidate, lastSeen }) => ({
+      ...candidate.item,
+      contentMode: "fallback" as const,
+      // Recent fallback remains last because fallback was sorted oldest-first.
+      _lastSeen: lastSeen,
+    })),
+  ].map((entry) => {
+    const item = entry as T & { contentMode: ContentMode; _lastSeen?: string };
+    delete item._lastSeen;
+    return item;
+  });
+};
 
 const stableContentId = (prefix: string, text: string) => {
   let hash = 0;
@@ -859,6 +956,7 @@ const buildShadowingItem = (item: {
   pronunciationTip: string;
   chunks?: ReturnType<typeof chunkByPhrase>;
   additionalExample?: string;
+  semantic?: ContentSemanticMetadata;
 }): ShadowingItem => ({
   id: item.id,
   text: item.text,
@@ -869,6 +967,7 @@ const buildShadowingItem = (item: {
   language: "en",
   translationLanguage: "pt-BR",
   ...(item.additionalExample ? { additionalExample: item.additionalExample } : {}),
+  ...(item.semantic ? { semantic: item.semantic } : {}),
 });
 
 const translateGeneratedPhrase = (phrase: string, area: string) => {
@@ -1196,6 +1295,66 @@ const buildPlanListeningLesson = (user: UserProfile, dailyPlan: DailyPlan, memor
     }),
   };
 };
+
+const buildSemanticListeningLesson = (context: SemanticContext, user: UserProfile, dailyPlan: DailyPlan): ListeningLesson => ({
+  id: stableContentId("semantic-listening", `${dailyPlan.date}:${context.scenario}`),
+  title: context.title,
+  level: normalizeLevel(user.currentLevel),
+  situationDescription: `${context.setting}: ${context.scenario.replace(/_/g, " ")}`,
+  dialogue: context.dialogue,
+  questions: [
+    { id: "semantic-question-1", prompt: "What is the situation?", answer: context.scenario.replace(/_/g, " ") },
+    { id: "semantic-question-2", prompt: "What does the learner want?", answer: context.communicativeGoal.replace(/_/g, " ") },
+  ],
+  semantic: context,
+  comprehension: context.dialogue.map((text, index) => ({
+    sourceText: text.includes(":") ? text.slice(text.indexOf(":") + 1).trim() : text,
+    translation: context.translations[index],
+    translationPtBr: context.translations[index],
+    context: context.scenario.replace(/_/g, " "),
+  })),
+});
+
+const buildSemanticVocabulary = (context: SemanticContext, user: UserProfile, dailyPlan: DailyPlan): VocabularyItem => ({
+  id: stableContentId("semantic-vocabulary", `${dailyPlan.date}:${context.vocabularyPhrase}`),
+  phrase: context.vocabularyPhrase,
+  translation: context.vocabularyTranslation,
+  level: normalizeLevel(user.currentLevel),
+  category: `${context.topic}: ${context.subtopic}`,
+  sentences: [{ text: context.vocabularyPhrase, translation: context.vocabularyTranslation }],
+  confidence: 50,
+  nextReviewAt: new Date(`${dailyPlan.date}T12:00:00.000Z`).toISOString(),
+  hits: 0,
+  misses: 0,
+  source: "semantic_daily_plan",
+  semantic: context,
+});
+
+const buildSemanticShadowing = (context: SemanticContext, dailyPlan: DailyPlan): ShadowingItem => buildShadowingItem({
+  id: stableContentId("semantic-shadowing", `${dailyPlan.date}:${context.shadowingPhrase}`),
+  text: context.shadowingPhrase,
+  translation: context.shadowingTranslation,
+  explanation: `Contexto: ${context.topic} / ${context.scenario.replace(/_/g, " ")}.`,
+  pronunciationTip: "Fale em blocos curtos e conecte as palavras naturalmente.",
+  chunks: chunkByPhrase(context.shadowingPhrase, context.shadowingTranslation),
+  semantic: context,
+});
+
+const buildSemanticThinkPrompt = (context: SemanticContext, dailyPlan: DailyPlan): ThinkInEnglishPrompt => ({
+  id: stableContentId("semantic-think", `${dailyPlan.date}:${context.thinkPrompt}`),
+  userMessage: context.thinkPrompt,
+  coachReply: context.thinkReply,
+  semantic: context,
+});
+
+const buildSemanticConversationMode = (context: SemanticContext, dailyPlan: DailyPlan): ConversationMode => ({
+  id: stableContentId("semantic-conversation", `${dailyPlan.date}:${context.scenario}`),
+  title: context.title,
+  description: `Practice ${context.communicativeGoal.replace(/_/g, " ")} in a ${context.setting}.`,
+  audience: "general",
+  starter: context.dialogue[0],
+  semantic: context,
+});
 
 const buildPlanShadowingItems = (user: UserProfile, dailyPlan: DailyPlan, memory: TeacherMemory): ShadowingItem[] =>
   buildShadowingCandidates(user, dailyPlan, memory);
@@ -1602,33 +1761,117 @@ export class ContentRepository {
   ): LearningContent {
     const seed = dailyProgressionSeed(dailyPlan, user);
     const memory = buildTeacherMemory(history);
+    const semanticHistory = (module: DailyContentModule) =>
+      (history.presentedContent ?? [])
+        .filter((item) => item.type === module || (module === "think-in-english" && item.type === "conversation"))
+        .map((item) => item.semantic)
+        .filter((semantic): semantic is ContentSemanticMetadata => Boolean(semantic));
+    const contextFor = (module: DailyContentModule) => selectSemanticContext({
+      userId: user.id,
+      date: dailyPlan.date,
+      level: normalizeLevel(user.currentLevel),
+      module,
+      recent: semanticHistory(module),
+    });
+    const vocabularyContext = contextFor("vocabulary");
+    const listeningContext = contextFor("listening");
+    const shadowingContext = contextFor("shadowing");
+    const conversationContext = contextFor("conversation");
+    const thinkContext = contextFor("think-in-english");
     const shadowingCandidates = buildPlanShadowingItems(user, dailyPlan, memory);
     const vocabularyCatalog = orderVocabularyForLevel(content.vocabulary, user, dailyPlan);
     const listeningCatalog = orderListeningForLevel(content.listeningLessons, user, dailyPlan);
+    const vocabulary = uniqueBy([buildSemanticVocabulary(vocabularyContext, user, dailyPlan), ...buildPlanVocabulary(user, dailyPlan, memory), ...vocabularyCatalog], (item) => item.phrase);
+    const listeningLessons = uniqueBy([buildSemanticListeningLesson(listeningContext, user, dailyPlan), buildPlanListeningLesson(user, dailyPlan, memory), ...listeningCatalog], (item) => item.id);
+    const selectedShadowing = selectShadowingItems(
+      [buildSemanticShadowing(shadowingContext, dailyPlan), ...shadowingCandidates],
+      rotateItems(content.shadowingItems, seed),
+      dailyPlan,
+      history
+    );
+    const shadowing = uniqueBy(
+      [buildSemanticShadowing(shadowingContext, dailyPlan), ...selectedShadowing],
+      (item) => item.text
+    ).slice(0, 4);
 
     return {
-      vocabulary: uniqueBy(
-        [
-          ...buildPlanVocabulary(user, dailyPlan, memory),
-          ...vocabularyCatalog,
+      vocabulary: orderByEligibility("vocabulary", vocabulary.map((item) => ({ id: item.id, text: item.phrase, item })), history, seed),
+      listeningLessons: orderByEligibility("listening", listeningLessons.map((item) => ({
+        id: item.id,
+        text: item.title,
+        aliases: [
+          ...item.dialogue.map((line) => contentFingerprint("listening", line.includes(":") ? line.slice(line.indexOf(":") + 1) : line)),
         ],
-        (item) => item.phrase
-      ),
-      listeningLessons: uniqueBy(
-        [
-          buildPlanListeningLesson(user, dailyPlan, memory),
-          ...listeningCatalog,
-        ],
-        (item) => item.id
-      ),
-      shadowingItems: selectShadowingItems(shadowingCandidates, rotateItems(content.shadowingItems, seed), dailyPlan, history),
-      conversationModes: rotateItems(content.conversationModes, seed),
-      developerModes: rotateItems(content.developerModes, seed),
-      thinkInEnglishPrompts: [
-        buildPlanThinkPrompt(dailyPlan, user, memory),
-        ...rotateItems(content.thinkInEnglishPrompts, seed),
-      ],
+        item,
+      })), history, seed),
+      shadowingItems: orderByEligibility("shadowing", shadowing.map((item) => ({ id: item.id, text: item.text, item })), history, seed),
+      conversationModes: orderByEligibility("conversation", [buildSemanticConversationMode(conversationContext, dailyPlan), ...rotateItems(content.conversationModes, seed)].map((item) => ({ id: item.id, text: item.starter, item })), history, seed),
+      developerModes: orderByEligibility("conversation", rotateItems(content.developerModes, seed).map((item) => ({ id: item.id, text: item.starter, item })), history, seed),
+      thinkInEnglishPrompts: orderByEligibility("conversation", [buildSemanticThinkPrompt(thinkContext, dailyPlan), buildPlanThinkPrompt(dailyPlan, user, memory), ...rotateItems(content.thinkInEnglishPrompts, seed)].map((item) => ({ id: item.id, text: item.userMessage, item })), history, seed),
     };
+  }
+
+  async getPresentedContent(userId: string) {
+    if (mongoose.connection.readyState !== 1) return [];
+    const rows = await ContentExposureModel.find({ userId })
+      .select("type itemId title semantic lastPresentedAt")
+      .lean();
+    return rows.map((row) => ({
+      id: String(row._id),
+      type: row.type,
+      itemId: row.itemId,
+      title: row.title,
+      completedAt: row.lastPresentedAt.toISOString(),
+      semantic: row.semantic && row.semantic.topic && row.semantic.subtopic && row.semantic.scenario && row.semantic.communicativeGoal
+        ? {
+            topic: row.semantic.topic,
+            subtopic: row.semantic.subtopic,
+            scenario: row.semantic.scenario,
+            communicativeGoal: row.semantic.communicativeGoal,
+            setting: row.semantic.setting ?? undefined,
+            participants: row.semantic.participants ?? [],
+            keywords: row.semantic.keywords ?? [],
+          }
+        : undefined,
+    }));
+  }
+
+  async recordDailyPresentation(userId: string, content: LearningContent) {
+    if (mongoose.connection.readyState !== 1 || !mongoose.Types.ObjectId.isValid(userId)) return;
+    const mongoUserId = new mongoose.Types.ObjectId(userId);
+    const now = new Date();
+    // Record only the leading daily recommendations, not every catalog item
+    // delivered for browsing. Bulk upsert keeps this idempotent and avoids N+1.
+    const selected = [
+      ...content.vocabulary.slice(0, 3).map((item) => ({ type: "vocabulary", itemId: item.id, title: item.phrase, semantic: item.semantic })),
+      ...content.listeningLessons.slice(0, 1).map((item) => ({ type: "listening", itemId: item.id, title: item.title, semantic: item.semantic })),
+      ...content.shadowingItems.slice(0, 4).map((item) => ({ type: "shadowing", itemId: item.id, title: item.text, semantic: item.semantic })),
+      ...content.conversationModes.slice(0, 1).map((item) => ({ type: "conversation", itemId: item.id, title: item.starter, semantic: item.semantic })),
+      ...content.developerModes.slice(0, 1).map((item) => ({ type: "conversation", itemId: item.id, title: item.starter, semantic: item.semantic })),
+      ...content.thinkInEnglishPrompts.slice(0, 1).map((item) => ({ type: "think-in-english", itemId: item.id, title: item.userMessage, semantic: item.semantic })),
+    ];
+    if (!selected.length) return;
+    await ContentExposureModel.bulkWrite(selected.map((item) => {
+      const semantic = item.semantic
+        ? { ...item.semantic, participants: item.semantic.participants ?? [], keywords: item.semantic.keywords ?? [] }
+        : undefined;
+      return ({
+      updateOne: {
+        filter: { userId: mongoUserId, type: item.type, fingerprint: contentFingerprint(item.type, item.title) },
+        update: {
+          $set: {
+            itemId: item.itemId,
+            title: item.title,
+            semantic,
+            ...(semantic ? { semanticFingerprint: semanticFingerprint(semantic) } : {}),
+            lastPresentedAt: now,
+          },
+          $setOnInsert: { userId: mongoUserId, type: item.type, fingerprint: contentFingerprint(item.type, item.title), firstPresentedAt: now },
+        },
+        upsert: true,
+      },
+    });
+    }));
   }
 
   async getDueReviewItems(userId: string) {

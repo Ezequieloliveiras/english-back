@@ -20,6 +20,11 @@ export const env = {
   ],
 
   openAiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openAiPlannerModel: process.env.OPENAI_PLANNER_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+  openAiContentModel: process.env.OPENAI_CONTENT_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+  openAiAnalysisModel: process.env.OPENAI_ANALYSIS_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+  aiDailyPlanEnabled: process.env.AI_DAILY_PLAN_ENABLED === "true",
+  aiContentGenerationEnabled: process.env.AI_CONTENT_GENERATION_ENABLED === "true",
   authCookieName:
     process.env.AUTH_COOKIE_NAME ?? "english_os_session",
   voiceProviderEndpoint:

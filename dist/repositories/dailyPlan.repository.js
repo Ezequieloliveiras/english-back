@@ -51,6 +51,7 @@ const mapPlan = (plan) => ({
     completedAt: plan.completedAt ?? null,
     generationMethod: plan.generationMethod ?? "heuristic",
     generationReason: plan.generationReason ?? "Generated from profile level, goal, difficulty, profession and available minutes.",
+    aiBlueprint: plan.aiBlueprint ?? null,
     blocks: plan.blocks.map(mapBlock),
 });
 const mapUser = (user) => ({
@@ -171,6 +172,7 @@ class DailyPlanRepository {
                 completedAt: plan.completedAt ?? null,
                 generationMethod: plan.generationMethod ?? "heuristic",
                 generationReason: plan.generationReason ?? "Generated from profile level, goal, difficulty, profession and available minutes.",
+                aiBlueprint: plan.aiBlueprint ?? null,
                 blocks: plan.blocks,
             },
         }, { new: true, upsert: true });
@@ -182,6 +184,18 @@ class DailyPlanRepository {
             return plan;
         }
         const updated = await dailyPlan_model_1.DailyPlanModel.findByIdAndUpdate(plan.id, { $set: { blocks: plan.blocks, status: plan.status ?? "not_started", completedAt: plan.completedAt ?? null } }, { new: true });
+        return updated ? mapPlan(updated) : null;
+    }
+    async updateAiBlueprint(planId, blueprint) {
+        if (!isDatabaseReady()) {
+            const plan = [...memoryState.plans.values()].find((entry) => entry.id === planId);
+            if (!plan)
+                return null;
+            const updated = { ...plan, aiBlueprint: blueprint ?? null };
+            memoryState.plans.set(`${updated.userId}:${updated.date}`, updated);
+            return updated;
+        }
+        const updated = await dailyPlan_model_1.DailyPlanModel.findByIdAndUpdate(planId, { $set: { aiBlueprint: blueprint ?? null } }, { new: true });
         return updated ? mapPlan(updated) : null;
     }
     async findOrCreateProgress(user) {

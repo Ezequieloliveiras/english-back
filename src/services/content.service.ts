@@ -5,8 +5,11 @@ import { SettingsRepository } from "../repositories/settings.repository";
 import { UserGoalRepository } from "../repositories/userGoal.repository";
 import { DailyPlanService } from "./dailyPlan.service";
 import { ProgressService } from "./progress.service";
+import { LearningStateService } from "./learningState.service";
+import { DailyAiPlannerService } from "./dailyAiPlanner.service";
 
 export class ContentService {
+  private readonly blueprintInFlight = new Map<string, Promise<any>>();
   constructor(
     private readonly contentRepository: ContentRepository,
     private readonly dailyPlanService: DailyPlanService,
@@ -14,7 +17,9 @@ export class ContentService {
     private readonly aiRepository: AiRepository,
     private readonly practiceRepository: PracticeRepository,
     private readonly progressService?: ProgressService,
-    private readonly userGoalRepository?: UserGoalRepository
+    private readonly userGoalRepository?: UserGoalRepository,
+    private readonly learningStateService?: LearningStateService,
+    private readonly dailyAiPlannerService?: DailyAiPlannerService
   ) {}
 
   async getBootstrap(userId: string) {
@@ -27,6 +32,7 @@ export class ContentService {
       reviewQueue,
       completionState,
       goal,
+      presentedContent,
     ] = await Promise.all([
       this.contentRepository.getLearningContent(userId),
       this.settingsRepository.findOrCreate(userId),
@@ -35,20 +41,27 @@ export class ContentService {
       this.contentRepository.getDueReviewItems(userId),
       this.practiceRepository.getUserCompletionState(userId),
       this.userGoalRepository?.findByUserId(userId) ?? Promise.resolve(null),
+      this.contentRepository.getPresentedContent(userId),
     ]);
     const recalculatedProgress = await this.progressService?.recalculateSkillScores(userId, user.currentLevel);
-    const personalizedContent = this.contentRepository.personalizeForPlan(content, user, dailyPlan, {
+    const effectiveProgress = recalculatedProgress ?? progress;
+    const planWithBlueprint = await this.ensureBlueprint({ dailyPlan, user, progress: effectiveProgress, reviewQueue });
+    const personalizedContent = this.contentRepository.personalizeForPlan(content, user, planWithBlueprint, {
       completedActivities: completionState.completedActivities,
       listeningAttempts: completionState.listeningAttempts,
       recentSpeakingAttempts,
       dueReviewItems: reviewQueue,
+      // A page reload must preserve today's selection. Yesterday's exposures,
+      // however, make an item known for tomorrow's eligibility calculation.
+      presentedContent: presentedContent.filter((item) => item.completedAt.slice(0, 10) < dailyPlan.date),
     });
+    await this.contentRepository.recordDailyPresentation(userId, personalizedContent);
 
     return {
       user,
       settings,
-      dailyPlan,
-      progress: recalculatedProgress ?? progress,
+      dailyPlan: planWithBlueprint,
+      progress: effectiveProgress,
       realProgressStats,
       recentSpeakingAttempts,
       completedActivities: completionState.completedActivities,
@@ -62,11 +75,33 @@ export class ContentService {
             targetLevel: goal.targetLevel,
             professionalContext: goal.professionalContext,
             deadline: goal.deadline,
-            progress: (recalculatedProgress ?? progress).consistencyScore,
+            progress: effectiveProgress.consistencyScore,
           }
         : null,
       requiresGoalSetup: !goal,
       ...personalizedContent,
     };
+  }
+
+  private async ensureBlueprint(input: { dailyPlan: any; user: any; progress: any; reviewQueue: any[] }) {
+    if (input.dailyPlan.aiBlueprint || !this.learningStateService || !this.dailyAiPlannerService) return input.dailyPlan;
+    const key = input.dailyPlan.id;
+    const existing = this.blueprintInFlight.get(key);
+    if (existing) return existing;
+    const generation = (async () => {
+      try {
+        return await this.dailyPlanService.saveAiBlueprint(
+          input.dailyPlan,
+          await this.dailyAiPlannerService!.create(
+            input.dailyPlan,
+            await this.learningStateService!.build({ user: input.user, progress: input.progress, dueReviews: input.reviewQueue, recentPlans: [input.dailyPlan] })
+          )
+        );
+      } finally {
+        this.blueprintInFlight.delete(key);
+      }
+    })();
+    this.blueprintInFlight.set(key, generation);
+    return generation;
   }
 }

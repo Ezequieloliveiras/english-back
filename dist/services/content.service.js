@@ -28,7 +28,10 @@ class ContentService {
         ]);
         const recalculatedProgress = await this.progressService?.recalculateSkillScores(userId, user.currentLevel);
         const effectiveProgress = recalculatedProgress ?? progress;
-        const planWithBlueprint = await this.ensureBlueprint({ dailyPlan, user, progress: effectiveProgress, reviewQueue });
+        const learningState = this.learningStateService
+            ? await this.learningStateService.build({ user, progress: effectiveProgress, dueReviews: reviewQueue, recentPlans: [dailyPlan] })
+            : undefined;
+        const planWithBlueprint = await this.ensureBlueprint({ dailyPlan, user, progress: effectiveProgress, reviewQueue, learningState });
         const personalizedContent = this.contentRepository.personalizeForPlan(content, user, planWithBlueprint, {
             completedActivities: completionState.completedActivities,
             listeningAttempts: completionState.listeningAttempts,
@@ -61,11 +64,14 @@ class ContentService {
                 }
                 : null,
             requiresGoalSetup: !goal,
+            proficiencyAssessment: learningState?.proficiency,
             ...personalizedContent,
         };
     }
     async ensureBlueprint(input) {
-        if (input.dailyPlan.aiBlueprint || !this.learningStateService || !this.dailyAiPlannerService)
+        if (input.dailyPlan.aiBlueprint)
+            return this.dailyPlanService.ensureUniqueAiActivityIds(input.dailyPlan);
+        if (!this.learningStateService || !this.dailyAiPlannerService)
             return input.dailyPlan;
         const key = input.dailyPlan.id;
         const existing = this.blueprintInFlight.get(key);
@@ -73,7 +79,7 @@ class ContentService {
             return existing;
         const generation = (async () => {
             try {
-                return await this.dailyPlanService.saveAiBlueprint(input.dailyPlan, await this.dailyAiPlannerService.create(input.dailyPlan, await this.learningStateService.build({ user: input.user, progress: input.progress, dueReviews: input.reviewQueue, recentPlans: [input.dailyPlan] })));
+                return await this.dailyPlanService.saveAiBlueprint(input.dailyPlan, await this.dailyAiPlannerService.create(input.dailyPlan, input.learningState ?? await this.learningStateService.build({ user: input.user, progress: input.progress, dueReviews: input.reviewQueue, recentPlans: [input.dailyPlan] })));
             }
             finally {
                 this.blueprintInFlight.delete(key);

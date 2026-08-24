@@ -515,7 +515,7 @@ export class DailyPlanService {
       }
 
       const normalizedPlan = await this.persistNormalizedPlan(existingPlan);
-      return { user: resolvedUser, dailyPlan: normalizedPlan, progress };
+      return { user: resolvedUser, dailyPlan: await this.ensureUniqueAiActivityIds(normalizedPlan), progress };
     }
 
     const plan = await this.dailyPlanRepository.savePlan({
@@ -567,6 +567,21 @@ export class DailyPlanService {
     const target = next.activities.find((entry) => entry.id === activity.id)!;
     target.status = "completed";
     return this.saveAiBlueprint(dailyPlan, next);
+  }
+
+  async ensureUniqueAiActivityIds(plan: DailyPlan) {
+    const blueprint = plan.aiBlueprint;
+    if (!blueprint || blueprint.activities.every((activity) => activity.id.startsWith(`${plan.id}:`))) return plan;
+    const next = structuredClone(blueprint);
+    next.activities = next.activities.map((activity) => ({
+      ...activity,
+      id: activity.id.startsWith(`${plan.id}:`) ? activity.id : `${plan.id}:${activity.id}`,
+      // A legacy generated payload was tied to the old identity. Regenerate it
+      // lazily under the new, plan-specific identity instead of inheriting it.
+      generatedContent: undefined,
+      status: activity.status === "completed" ? "planned" : activity.status === "ready" ? "planned" : activity.status,
+    }));
+    return this.saveAiBlueprint(plan, next);
   }
 
   async advanceTodayPlan(userId: string) {

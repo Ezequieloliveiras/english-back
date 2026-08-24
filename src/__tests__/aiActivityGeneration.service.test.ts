@@ -18,4 +18,32 @@ describe("lazy AI activity generation", () => {
     expect(second.activity.generatedContent).toEqual(first.activity.generatedContent);
     expect(saves).toBe(2);
   });
+
+  it("repairs a legacy listening fallback that has text but no dialogue", async () => {
+    const legacyPlan = structuredClone(plan);
+    legacyPlan.aiBlueprint!.activities[0].status = "ready";
+    legacyPlan.aiBlueprint!.activities[0].generatedContent = { text: "old generic fallback" };
+    const service = new AiActivityGenerationService(
+      { saveAiBlueprint: async (_plan: DailyPlan, blueprint: any) => ({ ...legacyPlan, aiBlueprint: blueprint }) } as any,
+      { generateBlueprintActivity: async () => { throw new Error("fallback expected"); } } as any,
+    );
+
+    const result = await service.getOrGenerate(legacyPlan, "listening-1");
+    expect((result.activity.generatedContent as any).dialogue).toHaveLength(3);
+    expect((result.activity.generatedContent as any).questions).toHaveLength(2);
+  });
+
+  it("repairs a legacy conversation fallback with a usable coach opening", async () => {
+    const conversationPlan = structuredClone(plan);
+    conversationPlan.aiBlueprint!.activities[0] = {
+      ...conversationPlan.aiBlueprint!.activities[0], id: "conversation-1", module: "conversation", status: "ready", generatedContent: { text: "Practice guided practice in this situation." },
+    };
+    const service = new AiActivityGenerationService(
+      { saveAiBlueprint: async (_plan: DailyPlan, blueprint: any) => ({ ...conversationPlan, aiBlueprint: blueprint }) } as any,
+      { generateBlueprintActivity: async () => { throw new Error("fallback expected"); } } as any,
+    );
+
+    const result = await service.getOrGenerate(conversationPlan, "conversation-1");
+    expect((result.activity.generatedContent as any).openingMessage).toContain("What are you working on today?");
+  });
 });

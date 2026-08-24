@@ -341,7 +341,7 @@ Use os minutos disponÃ­veis sem ultrapassar o total.
         const startedAt = Date.now();
         const prompt = `You are the adaptive pedagogical engine for English OS. Return JSON only. Do not reveal reasoning.
 NEW means substantially new semantic context. REVIEW requires an item in dueReviews. REINFORCEMENT requires a real weak pattern or low score.
-Create 3 to 6 activities. At most 2 per module. Avoid semantic paraphrases from recentSemanticHistory.
+The proficiency object is an evidence-based working estimate, not a certificate. Use its nextCompetencies as the learning objectives; choose one observable competency per activity and do not promote difficulty merely because a plan was completed. Create 3 to 6 activities. At most 2 per module. Avoid semantic paraphrases from recentSemanticHistory.
 Required JSON: {"dailyObjective":"short","pedagogicalFocus":["skill"],"activities":[{"id":"short-id","module":"vocabulary|listening|shadowing|pronunciation|conversation|think-in-english","contentMode":"new|review|reinforcement","level":"A1|A2|B1|B2|C1","semantic":{"topic":"","subtopic":"","scenario":"","communicativeGoal":"","setting":"","participants":[],"keywords":[]},"focus":"short","reason":"short","status":"planned"}]}`;
         const response = await this.client.responses.create({
             model: env_1.env.openAiPlannerModel,

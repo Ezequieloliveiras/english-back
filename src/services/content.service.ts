@@ -45,7 +45,10 @@ export class ContentService {
     ]);
     const recalculatedProgress = await this.progressService?.recalculateSkillScores(userId, user.currentLevel);
     const effectiveProgress = recalculatedProgress ?? progress;
-    const planWithBlueprint = await this.ensureBlueprint({ dailyPlan, user, progress: effectiveProgress, reviewQueue });
+    const learningState = this.learningStateService
+      ? await this.learningStateService.build({ user, progress: effectiveProgress, dueReviews: reviewQueue, recentPlans: [dailyPlan] })
+      : undefined;
+    const planWithBlueprint = await this.ensureBlueprint({ dailyPlan, user, progress: effectiveProgress, reviewQueue, learningState });
     const personalizedContent = this.contentRepository.personalizeForPlan(content, user, planWithBlueprint, {
       completedActivities: completionState.completedActivities,
       listeningAttempts: completionState.listeningAttempts,
@@ -79,12 +82,14 @@ export class ContentService {
           }
         : null,
       requiresGoalSetup: !goal,
+      proficiencyAssessment: learningState?.proficiency,
       ...personalizedContent,
     };
   }
 
-  private async ensureBlueprint(input: { dailyPlan: any; user: any; progress: any; reviewQueue: any[] }) {
-    if (input.dailyPlan.aiBlueprint || !this.learningStateService || !this.dailyAiPlannerService) return input.dailyPlan;
+  private async ensureBlueprint(input: { dailyPlan: any; user: any; progress: any; reviewQueue: any[]; learningState?: any }) {
+    if (input.dailyPlan.aiBlueprint) return this.dailyPlanService.ensureUniqueAiActivityIds(input.dailyPlan);
+    if (!this.learningStateService || !this.dailyAiPlannerService) return input.dailyPlan;
     const key = input.dailyPlan.id;
     const existing = this.blueprintInFlight.get(key);
     if (existing) return existing;
@@ -94,7 +99,7 @@ export class ContentService {
           input.dailyPlan,
           await this.dailyAiPlannerService!.create(
             input.dailyPlan,
-            await this.learningStateService!.build({ user: input.user, progress: input.progress, dueReviews: input.reviewQueue, recentPlans: [input.dailyPlan] })
+            input.learningState ?? await this.learningStateService!.build({ user: input.user, progress: input.progress, dueReviews: input.reviewQueue, recentPlans: [input.dailyPlan] })
           )
         );
       } finally {

@@ -344,4 +344,5 @@ export interface DashboardPayload {
   conversationModes: ConversationMode[];
   developerModes: ConversationMode[];
   thinkInEnglishPrompts: ThinkInEnglishPrompt[];
+  proficiencyAssessment?: import("../services/curriculum.service").ProficiencyAssessment;
 }

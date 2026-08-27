@@ -35,6 +35,7 @@ class ReviewService {
             evidenceType: "retention_review",
             evidenceRef: itemId,
         });
+        await this.dailyPlanService.markAiActivityCompleted(userId, undefined, "review");
         await this.progressService?.recordVocabularyReview({
             userId,
             itemId: updated?.id ?? itemId,
@@ -43,6 +44,9 @@ class ReviewService {
             reviewCount: nextHits + nextMisses,
         });
         return updated;
+    }
+    async generateReviewQueue(userId) {
+        return this.contentRepository.generateReviewQueue(userId);
     }
 }
 exports.ReviewService = ReviewService;

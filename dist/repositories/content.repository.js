@@ -1517,6 +1517,65 @@ class ContentRepository {
                 },
             });
         }));
+        await this.schedulePresentedPhrasesForReview(userId, content);
+    }
+    /**
+     * Seeds the spaced-repetition queue from phrases the learner has actually
+     * received in their daily practice. Previously a schedule was only created
+     * after a user had completed a review, which left a new learner with an
+     * permanently empty review queue.
+     */
+    async schedulePresentedPhrasesForReview(userId, content) {
+        if (mongoose_1.default.connection.readyState !== 1 || !mongoose_1.default.Types.ObjectId.isValid(userId))
+            return;
+        const now = new Date();
+        const candidates = uniqueBy([
+            ...content.vocabulary.slice(0, 3).map((item) => ({
+                phrase: item.phrase,
+                translation: item.translation,
+                level: item.level,
+                category: item.category,
+                sentences: item.sentences,
+            })),
+            ...content.shadowingItems.slice(0, 4).map((item) => ({
+                phrase: item.text,
+                translation: item.translation,
+                level: "A1",
+                category: "Frase praticada",
+                sentences: [{ text: item.text, translation: item.translation }],
+            })),
+        ], (item) => item.phrase).filter((item) => item.phrase.trim() && item.translation?.trim());
+        for (const item of candidates) {
+            const existing = await vocabularyItem_model_1.VocabularyItemModel.findOne({ userId, phrase: item.phrase }).select("_id").lean();
+            if (existing)
+                continue;
+            const saved = await vocabularyItem_model_1.VocabularyItemModel.findOneAndUpdate({ userId, phrase: item.phrase }, {
+                $setOnInsert: {
+                    userId,
+                    phrase: item.phrase,
+                    translation: item.translation,
+                    level: item.level,
+                    category: item.category,
+                    sentences: item.sentences,
+                    confidence: 50,
+                    nextReviewAt: now,
+                    hits: 0,
+                    misses: 0,
+                    source: "spaced_repetition",
+                    timesPracticed: 0,
+                    timesCorrect: 0,
+                    timesWrong: 0,
+                },
+            }, { new: true, upsert: true, setDefaultsOnInsert: true });
+            await reviewSchedule_model_1.ReviewScheduleModel.findOneAndUpdate({ userId, vocabularyItemId: saved._id }, {
+                $setOnInsert: {
+                    hits: 0,
+                    misses: 0,
+                    confidence: 50,
+                    nextReviewAt: now,
+                },
+            }, { upsert: true });
+        }
     }
     async getDueReviewItems(userId) {
         const now = new Date();
@@ -1530,6 +1589,24 @@ class ContentRepository {
             .map((schedule) => schedule.vocabularyItemId)
             .filter(Boolean)
             .map(toPlainVocabulary);
+    }
+    async generateReviewQueue(userId) {
+        if (mongoose_1.default.connection.readyState !== 1 || !mongoose_1.default.Types.ObjectId.isValid(userId))
+            return [];
+        const content = await this.getLearningContent(userId);
+        await this.schedulePresentedPhrasesForReview(userId, content);
+        const phrases = uniqueBy([
+            ...content.vocabulary.slice(0, 3).map((item) => ({ phrase: item.phrase })),
+            ...content.shadowingItems.slice(0, 4).map((item) => ({ phrase: item.text })),
+        ], (item) => item.phrase).map((item) => item.phrase);
+        const reviewItems = await vocabularyItem_model_1.VocabularyItemModel.find({ userId, phrase: { $in: phrases } })
+            .sort({ misses: -1, confidence: 1, updatedAt: -1 })
+            .limit(7)
+            .select("_id");
+        if (reviewItems.length > 0) {
+            await reviewSchedule_model_1.ReviewScheduleModel.updateMany({ userId, vocabularyItemId: { $in: reviewItems.map((item) => item._id) } }, { $set: { nextReviewAt: new Date() } });
+        }
+        return this.getDueReviewItems(userId);
     }
     async recordVocabularyReview(userId, item, review) {
         const next = {

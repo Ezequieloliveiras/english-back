@@ -59,6 +59,7 @@ export class ContentService {
       presentedContent: presentedContent.filter((item) => item.completedAt.slice(0, 10) < dailyPlan.date),
     });
     await this.contentRepository.recordDailyPresentation(userId, personalizedContent);
+    const refreshedReviewQueue = await this.contentRepository.getDueReviewItems(userId);
 
     return {
       user,
@@ -69,7 +70,7 @@ export class ContentService {
       recentSpeakingAttempts,
       completedActivities: completionState.completedActivities,
       listeningAttempts: completionState.listeningAttempts,
-      reviewQueue,
+      reviewQueue: refreshedReviewQueue,
       goal: goal
         ? {
             id: goal.id,

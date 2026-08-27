@@ -30,4 +30,13 @@ export class ReviewController {
 
     response.json(updated);
   };
+
+  generate = async (request: AuthenticatedRequest, response: Response) => {
+    if (!request.auth?.userId) {
+      response.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
+    response.json({ items: await this.reviewService.generateReviewQueue(request.auth.userId) });
+  };
 }

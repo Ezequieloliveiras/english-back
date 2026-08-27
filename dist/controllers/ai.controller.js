@@ -144,21 +144,29 @@ class AiController {
                     level,
                     requestId,
                 });
-                await this.dailyPlanService?.recordBlockEvidence({
+                const blockProgress = await this.dailyPlanService?.recordBlockEvidence({
                     userId: request.auth.userId,
                     blockType: "speaking-coach",
                     evidenceType: "pronunciation_analysis",
                     evidenceRef: targetPhrase.trim(),
                 });
+                let activityCompleted = false;
                 if (typeof activityId === "string" && activityId.trim()) {
-                    await this.dailyPlanService?.markAiActivityCompleted(request.auth.userId, activityId.trim(), "pronunciation");
+                    const updatedPlan = await this.dailyPlanService?.markAiActivityCompleted(request.auth.userId, activityId.trim(), "pronunciation");
+                    activityCompleted = updatedPlan?.aiBlueprint?.activities.some((activity) => activity.id === activityId.trim() && activity.status === "completed") ?? false;
                 }
                 console.info("[ai:speaking-coach] response sent", {
                     requestId,
                     stage: "response",
                     processingMs: Date.now() - startedAt,
                 });
-                response.json(result);
+                response.json({
+                    ...result,
+                    completion: {
+                        blockCompleted: blockProgress?.dailyPlan.blocks.some((block) => block.type === "speaking-coach" && block.status === "completed") ?? false,
+                        activityCompleted,
+                    },
+                });
             }
             catch (error) {
                 console.error("[ai:speaking-coach] request failed", {
